@@ -1,6 +1,5 @@
 package com.kairos.app
 
-import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -17,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kairos.app.ui.theme.KairosTheme
 
-class MainActivity : ComponentActivity() {
+class RegisterActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -26,18 +25,13 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LoginScreen(
-                        onLoginClick = { email, password ->
+                    RegisterScreen(
+                        onRegisterClick = { name, email, password, age, preferences ->
                             Toast.makeText(
                                 this,
-                                "Intentando login con $email / $password",
-                                Toast.LENGTH_SHORT
+                                "Registrando: $name / $email / $password / $age / $preferences",
+                                Toast.LENGTH_LONG
                             ).show()
-                        },
-                        onRegisterClick = {
-                            // 🔹 Abrir RegisterActivity
-                            val intent = Intent(this, RegisterActivity::class.java)
-                            startActivity(intent)
                         }
                     )
                 }
@@ -47,12 +41,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun LoginScreen(
-    onLoginClick: (String, String) -> Unit,
-    onRegisterClick: () -> Unit
+fun RegisterScreen(
+    onRegisterClick: (String, String, String, String, String) -> Unit
 ) {
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var age by remember { mutableStateOf("") }
+    var preferences by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -62,47 +58,67 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "KAIROS",
+            text = "Crear Cuenta",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Nombre") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("Correo") },
-            singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("Contraseña") },
-            singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(12.dp))
 
+        OutlinedTextField(
+            value = age,
+            onValueChange = { age = it },
+            label = { Text("Edad") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = preferences,
+            onValueChange = { preferences = it },
+            label = { Text("Preferencias") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { onLoginClick(email, password) },
+            onClick = { onRegisterClick(name, email, password, age, preferences) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
         ) {
-            Text("Iniciar sesión", fontSize = 18.sp)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        TextButton(onClick = onRegisterClick) {
-            Text("¿No tienes cuenta? Crear cuenta nueva")
+            Text("Registrarse", fontSize = 18.sp)
         }
     }
 }
