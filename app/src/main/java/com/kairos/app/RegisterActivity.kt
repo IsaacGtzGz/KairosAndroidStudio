@@ -1,5 +1,6 @@
 package com.kairos.app
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -19,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.kairos.app.models.User
 import com.kairos.app.network.RetrofitClient
+import com.kairos.app.utils.SessionManager
 
 
 class RegisterActivity : ComponentActivity() {
@@ -44,11 +46,12 @@ class RegisterActivity : ComponentActivity() {
                                     val response = RetrofitClient.instance.register(user)
                                     if (response.isSuccessful) {
                                         val data = response.body()
-                                        Toast.makeText(
-                                            this@RegisterActivity,
-                                            data?.message ?: "Registro exitoso",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        if (data?.success == true && !data.token.isNullOrEmpty()) {
+                                            SessionManager(this@RegisterActivity).saveAuthToken(data.token)
+                                            Toast.makeText(this@RegisterActivity, "Cuenta creada con éxito", Toast.LENGTH_LONG).show()
+                                            startActivity(Intent(this@RegisterActivity, HomeActivity::class.java))
+                                            finish()
+                                        }
                                     } else {
                                         Toast.makeText(
                                             this@RegisterActivity,

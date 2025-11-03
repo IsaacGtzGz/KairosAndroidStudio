@@ -20,10 +20,17 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.kairos.app.models.User
 import com.kairos.app.network.RetrofitClient
+import com.kairos.app.utils.SessionManager
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val sessionManager = SessionManager(this)
+        if (sessionManager.fetchAuthToken() != null) {
+            startActivity(Intent(this, HomeActivity::class.java))
+            finish()
+            return
+        }
         super.onCreate(savedInstanceState)
         setContent {
             KairosTheme {
@@ -43,12 +50,17 @@ class MainActivity : ComponentActivity() {
                                     if (response.isSuccessful) {
                                         val data = response.body()
                                         if (data?.success == true && !data.token.isNullOrEmpty()) {
+                                            val session = SessionManager(this@MainActivity)
+                                            session.saveAuthToken(data.token)
+
                                             Toast.makeText(
                                                 this@MainActivity,
                                                 "Bienvenido ${data.user?.nombre}",
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                            // Aquí luego guardaremos el token y pasaremos al Home
+
+                                            startActivity(Intent(this@MainActivity, HomeActivity::class.java))
+                                            finish()
                                         } else {
                                             Toast.makeText(
                                                 this@MainActivity,
