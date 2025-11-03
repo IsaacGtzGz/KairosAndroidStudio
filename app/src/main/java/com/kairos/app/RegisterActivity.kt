@@ -15,6 +15,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kairos.app.ui.theme.KairosTheme
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.kairos.app.models.User
+import com.kairos.app.network.RetrofitClient
+
 
 class RegisterActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,12 +32,36 @@ class RegisterActivity : ComponentActivity() {
                 ) {
                     RegisterScreen(
                         onRegisterClick = { name, email, password, age, preferences ->
-                            Toast.makeText(
-                                this,
-                                "Registrando: $name / $email / $password / $age / $preferences",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            lifecycleScope.launch {
+                                try {
+                                    val user = User(
+                                        nombre = name,
+                                        correo = email,
+                                        contrasena = password,
+                                        edad = age.toIntOrNull() ?: 0,
+                                        preferencias = preferences
+                                    )
+                                    val response = RetrofitClient.instance.register(user)
+                                    if (response.isSuccessful) {
+                                        val data = response.body()
+                                        Toast.makeText(
+                                            this@RegisterActivity,
+                                            data?.message ?: "Registro exitoso",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            this@RegisterActivity,
+                                            "Error en el registro: ${response.code()}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@RegisterActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
+
                     )
                 }
             }

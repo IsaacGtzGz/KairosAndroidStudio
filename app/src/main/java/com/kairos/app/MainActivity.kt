@@ -16,6 +16,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kairos.app.ui.theme.KairosTheme
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.kairos.app.models.User
+import com.kairos.app.network.RetrofitClient
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,11 +33,40 @@ class MainActivity : ComponentActivity() {
                 ) {
                     LoginScreen(
                         onLoginClick = { email, password ->
-                            Toast.makeText(
-                                this,
-                                "Intentando login con $email / $password",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            lifecycleScope.launch {
+                                try {
+                                    val credentials = mapOf(
+                                        "correo" to email,
+                                        "contrasena" to password
+                                    )
+                                    val response = RetrofitClient.instance.login(credentials)
+                                    if (response.isSuccessful) {
+                                        val data = response.body()
+                                        if (data?.success == true && !data.token.isNullOrEmpty()) {
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Bienvenido ${data.user?.nombre}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            // Aquí luego guardaremos el token y pasaremos al Home
+                                        } else {
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                data?.message ?: "Credenciales inválidas",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "Error: ${response.code()}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
                         },
                         onRegisterClick = {
                             // 🔹 Abrir RegisterActivity
