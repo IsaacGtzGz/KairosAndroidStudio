@@ -1,7 +1,5 @@
 package com.kairos.app
 
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,16 +13,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator // 👈 IMPORT NUEVO
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
@@ -39,10 +38,13 @@ import com.kairos.app.ui.theme.KairosTheme
 
 class MapActivity : ComponentActivity() {
 
+    // El estado de la ubicación Y el estado de carga
     private var userLocation by mutableStateOf<LatLng?>(null)
-    private val defaultLocation = LatLng(21.1290, -101.6700) // Ubicación por defecto (León, Gto)
+    private var isLoading by mutableStateOf(true)
 
-    // Lanzador para pedir permisos
+    private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
+
+    // Lanzador para pedir permisos DE UBICACIÓN
     private val requestPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -51,23 +53,25 @@ class MapActivity : ComponentActivity() {
                 // Permiso concedido, obtenemos ubicación
                 getDeviceLocation()
             } else {
-                // Permiso denegado
-                Toast.makeText(this, "Permiso de ubicación denegado", Toast.LENGTH_SHORT).show()
+                // Permiso denegado, usamos default y dejamos de cargar
+                Toast.makeText(this, "Permiso denegado, usando ubicación default", Toast.LENGTH_LONG).show()
                 userLocation = defaultLocation
+                isLoading = false
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        checkLocationPermission()
-
+        // 1. SETCONTENT SE LLAMA INMEDIATAMENTE
         setContent {
             KairosTheme {
-                // El POI (Point of Interest) simulado
-                val poiLocation = LatLng(21.1305, -101.6720) // Un punto simulado cercano
+                // El POI simulado
+                val poiLocation = LatLng(21.1305, -101.6720)
 
-                MapScreen(
+                // Este Composable ahora decide si muestra "Cargando" o el Mapa
+                MapScreenRoot(
+                    isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
                     poiLocation = poiLocation,
                     onNavigateClick = {
@@ -80,6 +84,9 @@ class MapActivity : ComponentActivity() {
                 )
             }
         }
+
+        // 2. DESPUÉS de dibujar, pedimos el permiso
+        checkLocationPermission()
     }
 
     private fun checkLocationPermission() {
@@ -92,36 +99,76 @@ class MapActivity : ComponentActivity() {
                 getDeviceLocation()
             }
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
-                // Muestra un dialogo explicativo (opcional)
                 requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
             else -> {
-                // Pide el permiso directamente
                 requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
         }
     }
 
+    // 3. Esta función AHORA SOLO actualiza los estados
     private fun getDeviceLocation() {
         try {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             fusedLocationClient.lastLocation
                 .addOnSuccessListener { location ->
-                    if (location != null) {
-                        userLocation = LatLng(location.latitude, location.longitude)
+                    userLocation = if (location != null) {
+                        LatLng(location.latitude, location.longitude)
                     } else {
-                        userLocation = defaultLocation
                         Toast.makeText(this, "No se pudo obtener ubicación, usando default", Toast.LENGTH_SHORT).show()
+                        defaultLocation
                     }
+                    isLoading = false // 👈 AVISAMOS QUE DEJE DE CARGAR
+                }
+                .addOnFailureListener {
+                    Toast.makeText(this, "Error al obtener ubicación, usando default", Toast.LENGTH_SHORT).show()
+                    userLocation = defaultLocation
+                    isLoading = false // 👈 AVISAMOS QUE DEJE DE CARGAR
                 }
         } catch (e: SecurityException) {
             Toast.makeText(this, "Error de seguridad: ${e.message}", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 }
 
+// -----------------------------------------------------------------
+// NUEVO COMPOSABLE "ROOT" (RAÍZ)
+// Decide si mostrar "Cargando" o el mapa real
+// -----------------------------------------------------------------
 @Composable
-fun MapScreen(
+fun MapScreenRoot(
+    isLoading: Boolean,
+    userLocation: LatLng,
+    poiLocation: LatLng,
+    onNavigateClick: () -> Unit
+) {
+    if (isLoading) {
+        // Muestra un círculo de "Cargando..." en el centro
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+    } else {
+        // Ya no está cargando, muestra el mapa
+        ActualMapScreen(
+            userLocation = userLocation,
+            poiLocation = poiLocation,
+            onNavigateClick = onNavigateClick
+        )
+    }
+}
+
+
+// -----------------------------------------------------------------
+// Este es el Composable que ANTES se llamaba "MapScreen"
+// Ahora solo se encarga de dibujar el mapa
+// -----------------------------------------------------------------
+@Composable
+fun ActualMapScreen(
     userLocation: LatLng,
     poiLocation: LatLng,
     onNavigateClick: () -> Unit
@@ -130,7 +177,7 @@ fun MapScreen(
         position = CameraPosition.fromLatLngZoom(userLocation, 15f)
     }
 
-    // Actualiza la cámara cuando la ubicación del usuario cambie
+    // Anima la cámara a la posición del usuario cuando se carga
     LaunchedEffect(userLocation) {
         cameraPositionState.animate(
             com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(userLocation, 15f)
@@ -142,9 +189,7 @@ fun MapScreen(
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
-                // Habilita el punto azul de "Mi Ubicación"
                 properties = MapProperties(isMyLocationEnabled = true),
-                // Deshabilita controles que no queremos (como el de centrar)
                 uiSettings = MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false)
             ) {
                 // Marcador de tu ubicación

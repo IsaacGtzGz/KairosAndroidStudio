@@ -1,16 +1,18 @@
 package com.kairos.app
 
-// 👇 IMPORTS NUEVOS AÑADIDOS
 import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.widget.Toast
+// ---------------------------------
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-// ---------------------------------
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
@@ -47,7 +50,6 @@ import com.google.accompanist.pager.*
 import kotlin.math.PI
 import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
-// 👇 IMPORT NUEVO AÑADIDO
 import androidx.core.content.ContextCompat
 
 // =======================================
@@ -55,22 +57,63 @@ import androidx.core.content.ContextCompat
 // =======================================
 class HomeActivity : ComponentActivity() {
 
-    // 👇 LANZADOR DE PERMISO DE LLAMADA (MOVIDO AQUÍ)
+    private lateinit var sessionManager: SessionManager
+    private var emergencyContactNumber = mutableStateOf<String?>(null)
+
+    // --- LANZADORES DE PERMISOS Y ACTIVIDADES ---
+
+    // Lanzador para permiso de LLAMADA
     private val requestCallPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted: Boolean ->
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
-                // Permiso concedido, ¡lanzar el 911!
                 launch911Dialer()
             } else {
                 Toast.makeText(this, "Permiso de llamada denegado", Toast.LENGTH_SHORT).show()
             }
         }
 
+    // Lanzador para permiso de CONTACTOS
+    private val requestContactPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                launchContactPicker()
+            } else {
+                Toast.makeText(this, "Permiso de contactos denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    // Lanzador que ABRE el selector de contactos y RECIBE el resultado
+    @SuppressLint("Range")
+    private val contactPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val contactUri: Uri? = result.data?.data
+                val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
+                // Consultar el número del contacto seleccionado
+                contentResolver.query(contactUri!!, projection, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
+
+                        // Guardar el número en la sesión y actualizar la UI
+                        sessionManager.saveEmergencyContact(number)
+                        emergencyContactNumber.value = number
+
+                        Toast.makeText(this, "Contacto de emergencia guardado: $number", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+
+    // --- CICLO DE VIDA ---
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val sessionManager = SessionManager(this)
+        sessionManager = SessionManager(this) // Inicializado aquí
+
+        // Cargar el contacto de emergencia guardado al iniciar
+        emergencyContactNumber.value = sessionManager.fetchEmergencyContact()
+
         val token = sessionManager.fetchAuthToken()
         if (token == null) {
             startActivity(Intent(this, MainActivity::class.java))
@@ -90,8 +133,13 @@ class HomeActivity : ComponentActivity() {
                         onOpenMap = {
                             startActivity(Intent(this, MapActivity::class.java))
                         },
-                        onSosClick = { // 👈 CONEXIÓN AÑADIDA
+                        onSosClick = {
                             handleSosClick()
+                        },
+                        // Pasamos el contacto y la función para seleccionarlo
+                        emergencyContact = emergencyContactNumber.value,
+                        onSelectContact = {
+                            handleSelectContactClick()
                         },
                         userName = "Aventurero" // aquí luego reemplaza por data.user?.nombre
                     )
@@ -100,7 +148,8 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    // 👇 FUNCIÓN DE LLAMADA (MOVIDA AQUÍ)
+    // --- FUNCIONES DE LÓGICA ---
+
     private fun launch911Dialer() {
         val intent = Intent(Intent.ACTION_DIAL).apply {
             data = Uri.parse("tel:911")
@@ -108,23 +157,39 @@ class HomeActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    // 👇 FUNCIÓN DE REVISIÓN DE PERMISO (MOVIDA AQUÍ)
     private fun handleSosClick() {
         when {
             ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.CALL_PHONE
             ) == PackageManager.PERMISSION_GRANTED -> {
-                // Ya tienes permiso, marca directo
                 launch911Dialer()
             }
-            shouldShowRequestPermissionRationale(Manifest.permission.CALL_PHONE) -> {
-                // Opcional: Muestra un diálogo explicando por qué necesitas el permiso
+            else -> {
                 requestCallPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
             }
+        }
+    }
+
+    // Función para lanzar el selector de contactos
+    private fun launchContactPicker() {
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE // Solo mostrar contactos con teléfono
+        }
+        contactPickerLauncher.launch(intent)
+    }
+
+    // Función que revisa el permiso de contactos antes de lanzar
+    private fun handleSelectContactClick() {
+        when {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_CONTACTS
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                launchContactPicker()
+            }
             else -> {
-                // Pide el permiso
-                requestCallPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                requestContactPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
             }
         }
     }
@@ -138,9 +203,12 @@ class HomeActivity : ComponentActivity() {
 fun HomeScreen(
     onLogout: () -> Unit,
     onOpenMap: () -> Unit,
-    onSosClick: () -> Unit, // 👈 PARÁMETRO NUEVO AÑADIDO
-    userName: String
+    onSosClick: () -> Unit,
+    userName: String,
+    emergencyContact: String?, // PARÁMETRO
+    onSelectContact: () -> Unit  // PARÁMETRO
 ) {
+    val scrollState = rememberScrollState()
     val scaffoldState = rememberTopAppBarState()
     val coroutine = rememberCoroutineScope()
 
@@ -166,17 +234,15 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(16.dp) // Espacio entre botones
             ) {
-                // Botón de Mapa (el que ya tenías)
+                // Botón de Mapa
                 FloatingActionButton(onClick = onOpenMap) {
-                    // Puedes cambiar el Text por un Icon si prefieres
                     Text("Map", modifier = Modifier.padding(6.dp))
                 }
-
-                // ¡NUEVO! Botón de Pánico (SOS)
+                // Botón de Pánico (SOS)
                 FloatingActionButton(
-                    onClick = { onSosClick() }, // 👈 CONEXIÓN AÑADIDA
-                    containerColor = MaterialTheme.colorScheme.errorContainer, // Color rojo
-                    shape = CircleShape // Bien redondo
+                    onClick = { onSosClick() },
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    shape = CircleShape
                 ) {
                     Text(
                         "SOS",
@@ -191,29 +257,67 @@ fun HomeScreen(
             Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)) {
+                .padding(16.dp)
+                .verticalScroll(scrollState) // 👈 AÑADE ESTA LÍNEA
+            ) {
 
-                // Greeting animado con ardilla (emoji)
                 AnimatedGreeting(userName = userName)
-
                 Spacer(modifier = Modifier.height(18.dp))
-
-                // Carrusel de descubrimientos
                 DiscoverCarousel()
-
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Tarjetas de acción rápida
+                // 👇 NUEVA TARJETA DE CONTACTO AÑADIDA
+                EmergencyContactCard(
+                    contactNumber = emergencyContact,
+                    onClick = onSelectContact
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
                 QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout)
-
                 Spacer(modifier = Modifier.height(18.dp))
-
-                // Sección de "Nature vibes" con micro-animaciones (plantas que se mecen)
                 NatureStrip()
             }
         }
     )
 }
+
+// -----------------------------
+// 👇 NUEVO COMPOSABLE: Tarjeta de Contacto de Emergencia
+// -----------------------------
+@Composable
+fun EmergencyContactCard(contactNumber: String?, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick), // Hacemos toda la tarjeta clickeable
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) // Un color diferente
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    "Contacto de Emergencia",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = contactNumber ?: "Toca para seleccionar un contacto", // Muestra el número o un texto de ayuda
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (contactNumber != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (contactNumber != null) FontWeight.Medium else FontWeight.Normal
+                )
+            }
+            Text(text = "📞", fontSize = 30.sp) // Emoji
+        }
+    }
+}
+
 
 // -----------------------------
 // Animated Greeting

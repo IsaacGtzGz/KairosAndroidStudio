@@ -16,6 +16,14 @@ class SessionManager(context: Context) {
         return prefs.getString("auth_token", null)
     }
 
+    fun saveEmergencyContact(phone: String) {
+        prefs.edit().putString("emergency_contact", phone).apply()
+    }
+
+    fun fetchEmergencyContact(): String? {
+        return prefs.getString("emergency_contact", null)
+    }
+
     fun clearSession() {
         prefs.edit().clear().apply()
     }
