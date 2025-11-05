@@ -1,9 +1,16 @@
 package com.kairos.app
 
+// 👇 IMPORTS NUEVOS AÑADIDOS
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+// ---------------------------------
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -40,11 +47,27 @@ import com.google.accompanist.pager.*
 import kotlin.math.PI
 import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
+// 👇 IMPORT NUEVO AÑADIDO
+import androidx.core.content.ContextCompat
 
 // =======================================
 // HomeActivity: UI animada, amigable y viva
 // =======================================
 class HomeActivity : ComponentActivity() {
+
+    // 👇 LANZADOR DE PERMISO DE LLAMADA (MOVIDO AQUÍ)
+    private val requestCallPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (isGranted) {
+                // Permiso concedido, ¡lanzar el 911!
+                launch911Dialer()
+            } else {
+                Toast.makeText(this, "Permiso de llamada denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionManager = SessionManager(this)
@@ -67,9 +90,41 @@ class HomeActivity : ComponentActivity() {
                         onOpenMap = {
                             startActivity(Intent(this, MapActivity::class.java))
                         },
+                        onSosClick = { // 👈 CONEXIÓN AÑADIDA
+                            handleSosClick()
+                        },
                         userName = "Aventurero" // aquí luego reemplaza por data.user?.nombre
                     )
                 }
+            }
+        }
+    }
+
+    // 👇 FUNCIÓN DE LLAMADA (MOVIDA AQUÍ)
+    private fun launch911Dialer() {
+        val intent = Intent(Intent.ACTION_DIAL).apply {
+            data = Uri.parse("tel:911")
+        }
+        startActivity(intent)
+    }
+
+    // 👇 FUNCIÓN DE REVISIÓN DE PERMISO (MOVIDA AQUÍ)
+    private fun handleSosClick() {
+        when {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CALL_PHONE
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                // Ya tienes permiso, marca directo
+                launch911Dialer()
+            }
+            shouldShowRequestPermissionRationale(Manifest.permission.CALL_PHONE) -> {
+                // Opcional: Muestra un diálogo explicando por qué necesitas el permiso
+                requestCallPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+            }
+            else -> {
+                // Pide el permiso
+                requestCallPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
             }
         }
     }
@@ -80,7 +135,12 @@ class HomeActivity : ComponentActivity() {
 // -----------------------------
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class)
 @Composable
-fun HomeScreen(onLogout: () -> Unit, onOpenMap: () -> Unit, userName: String) {
+fun HomeScreen(
+    onLogout: () -> Unit,
+    onOpenMap: () -> Unit,
+    onSosClick: () -> Unit, // 👈 PARÁMETRO NUEVO AÑADIDO
+    userName: String
+) {
     val scaffoldState = rememberTopAppBarState()
     val coroutine = rememberCoroutineScope()
 
@@ -102,8 +162,29 @@ fun HomeScreen(onLogout: () -> Unit, onOpenMap: () -> Unit, userName: String) {
         },
         bottomBar = { HomeBottomBar() },
         floatingActionButton = {
-            FloatingActionButton(onClick = onOpenMap) {
-                Text("Map", modifier = Modifier.padding(6.dp))
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp) // Espacio entre botones
+            ) {
+                // Botón de Mapa (el que ya tenías)
+                FloatingActionButton(onClick = onOpenMap) {
+                    // Puedes cambiar el Text por un Icon si prefieres
+                    Text("Map", modifier = Modifier.padding(6.dp))
+                }
+
+                // ¡NUEVO! Botón de Pánico (SOS)
+                FloatingActionButton(
+                    onClick = { onSosClick() }, // 👈 CONEXIÓN AÑADIDA
+                    containerColor = MaterialTheme.colorScheme.errorContainer, // Color rojo
+                    shape = CircleShape // Bien redondo
+                ) {
+                    Text(
+                        "SOS",
+                        modifier = Modifier.padding(16.dp),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         },
         content = { innerPadding ->

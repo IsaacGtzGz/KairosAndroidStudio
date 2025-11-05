@@ -167,7 +167,7 @@ fun MapScreen(
                     .align(Alignment.BottomCenter)
                     .padding(24.dp)
             ) {
-                Text(text = "Cómo llegar al POI")
+                Text(text = "Cómo llegar")
             }
         }
     }
