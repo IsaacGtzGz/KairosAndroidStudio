@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import com.google.accompanist.pager.*
 import kotlin.math.PI
 import kotlin.math.sin
+import androidx.compose.ui.platform.LocalContext
 
 // =======================================
 // HomeActivity: UI animada, amigable y viva
@@ -64,7 +65,7 @@ class HomeActivity : ComponentActivity() {
                             finish()
                         },
                         onOpenMap = {
-                            // placeholder: más adelante abrir pantalla de mapa
+                            startActivity(Intent(this, MapActivity::class.java))
                         },
                         userName = "Aventurero" // aquí luego reemplaza por data.user?.nombre
                     )
