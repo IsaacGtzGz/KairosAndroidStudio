@@ -65,4 +65,9 @@ dependencies {
     // Coroutines (para llamadas asíncronas)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
+    // Jetpack Compose animation
+    implementation("androidx.compose.animation:animation:1.5.0")
+    implementation("com.google.accompanist:accompanist-pager:0.30.1")
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.30.1")
+
 }

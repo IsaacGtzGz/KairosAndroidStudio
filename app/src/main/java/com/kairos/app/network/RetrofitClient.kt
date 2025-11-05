@@ -6,7 +6,9 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    private const val BASE_URL = "https://kairos-api.azurewebsites.net/"
+    //private const val BASE_URL = "https://kairos-api.azurewebsites.net/"
+    private const val BASE_URL = "http://192.168.1.66:5219/api/"
+
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
