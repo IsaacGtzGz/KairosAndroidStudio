@@ -8,7 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
-import android.telephony.SmsManager // IMPORT NUEVO
+import android.telephony.SmsManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,7 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll // IMPORTADO AHORA
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
@@ -43,8 +43,8 @@ import com.kairos.app.utils.SessionManager
 import com.google.accompanist.pager.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.LocationServices // IMPORT NUEVO
-import com.google.android.gms.location.Priority // IMPORT NUEVO
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 
 // =======================================
 // HomeActivity
@@ -53,22 +53,19 @@ class HomeActivity : ComponentActivity() {
 
     private lateinit var sessionManager: SessionManager
     private var emergencyContactNumber = mutableStateOf<String?>(null)
+    private var showSosDialog = mutableStateOf(false)
 
     // --- LANZADORES DE PERMISOS Y ACTIVIDADES ---
 
-    // 👇 NUEVO LANZADOR MÚLTIPLE PARA TODOS LOS PERMISOS DE SOS
     private val requestSosPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            // Revisa si TODOS los permisos fueron concedidos
             if (permissions.all { it.value }) {
-                // Todos concedidos, proceder con las acciones
                 proceedWithSosActions()
             } else {
                 Toast.makeText(this, "Se necesitan todos los permisos para la función SOS", Toast.LENGTH_LONG).show()
             }
         }
 
-    // Lanzador para permiso de CONTACTOS
     private val requestContactPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
@@ -78,7 +75,6 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
-    // Lanzador que ABRE el selector de contactos
     @SuppressLint("Range")
     private val contactPickerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -124,13 +120,21 @@ class HomeActivity : ComponentActivity() {
                             startActivity(Intent(this, MapActivity::class.java))
                         },
                         onSosClick = {
-                            handleSosClick() // Esta función ahora es más potente
+                            showSosDialog.value = true
                         },
                         emergencyContact = emergencyContactNumber.value,
                         onSelectContact = {
                             handleSelectContactClick()
                         },
-                        userName = "Aventurero"
+                        userName = "Aventurero",
+                        showSosDialog = showSosDialog.value,
+                        onDismissSosDialog = {
+                            showSosDialog.value = false
+                        },
+                        onConfirmSos = {
+                            showSosDialog.value = false
+                            handleSosPermissionCheck()
+                        }
                     )
                 }
             }
@@ -139,41 +143,47 @@ class HomeActivity : ComponentActivity() {
 
     // --- FUNCIONES DE LÓGICA ---
 
-    // 1. Inicia el marcado al 911
+    // 1. Inicia la LLAMADA (o el marcador)
     private fun launch911Dialer() {
         try {
-            val intent = Intent(Intent.ACTION_DIAL).apply {
+            val intent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:911")
             }
             startActivity(intent)
+        } catch (e: SecurityException) {
+            Toast.makeText(this, "Error de permisos para llamar", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "No se pudo iniciar la llamada", Toast.LENGTH_SHORT).show()
+            // Plan B: Abrir el marcador (ACTION_DIAL)
+            try {
+                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                    data = Uri.parse("tel:911")
+                }
+                startActivity(dialIntent)
+            } catch (e2: Exception) {
+                Toast.makeText(this, "No se pudo abrir la app de teléfono", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     // 2. Revisa los 3 permisos
-    private fun handleSosClick() {
+    private fun handleSosPermissionCheck() {
         val permissions = arrayOf(
             Manifest.permission.CALL_PHONE,
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION
         )
 
-        // Revisa si ya tiene los 3 permisos
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             proceedWithSosActions()
         } else {
-            // Si falta al menos uno, pide todos
             requestSosPermissionsLauncher.launch(permissions)
         }
     }
 
-    // 3. Ejecuta las acciones de SOS (si se tienen permisos)
+    // 3. Ejecuta las acciones de SOS
     private fun proceedWithSosActions() {
-        // Acción 1: Llamar al 911
         launch911Dialer()
 
-        // Acción 2: Enviar SMS al contacto de emergencia
         val contactNumber = sessionManager.fetchEmergencyContact()
         if (contactNumber.isNullOrBlank()) {
             Toast.makeText(this, "No hay contacto de emergencia seleccionado", Toast.LENGTH_LONG).show()
@@ -183,33 +193,42 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    // 4. Obtiene ubicación y envía el SMS
-    @SuppressLint("MissingPermission") // Está bien, porque ya revisamos los permisos en handleSosClick
+    // 4. Obtiene ubicación y envía el SMS (VERSIÓN MULTIPARTE)
+    @SuppressLint("MissingPermission")
     private fun sendEmergencySms(contactNumber: String) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        // Pide la ubicación actual con alta precisión
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location ->
-                val smsMessage: String
-                if (location != null) {
-                    val googleMapsLink = "http://maps.google.com/maps?q=${location.latitude},${location.longitude}"
-                    smsMessage = "¡AYUDA! Esta es mi última ubicación conocida: $googleMapsLink"
-                } else {
-                    smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
-                }
 
                 try {
-                    // Envía el SMS
                     val smsManager = SmsManager.getDefault()
-                    smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
-                    Toast.makeText(this, "Alerta SMS enviada.", Toast.LENGTH_LONG).show()
+
+                    if (location != null) {
+                        // Plan A: GPS funciona, enviar mensaje multiparte
+                        val googleMapsLink = "https://www.google.com/maps?q=${location.latitude},${location.longitude}"
+
+                        // Divide el mensaje en dos partes
+                        val parts = ArrayList<String>()
+                        parts.add("¡AYUDA! Esta es mi última ubicación conocida, por favor contáctame:")
+                        parts.add(googleMapsLink)
+
+                        smsManager.sendMultipartTextMessage(contactNumber, null, parts, null, null)
+                        Toast.makeText(this, "Alerta SMS (con ubicación) enviada.", Toast.LENGTH_LONG).show()
+
+                    } else {
+                        // Plan B: GPS falló, enviar mensaje simple
+                        val smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
+                        smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
+                        Toast.makeText(this, "Alerta SMS enviada (sin ubicación).", Toast.LENGTH_LONG).show()
+                    }
+
                 } catch (e: Exception) {
                     Toast.makeText(this, "Error al enviar SMS: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
             .addOnFailureListener {
-                // Si falla la ubicación, envía el SMS sin ella
+                // Plan C: Fallo catastrófico de ubicación (igual al Plan B)
                 val smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
                 try {
                     val smsManager = SmsManager.getDefault()
@@ -222,7 +241,7 @@ class HomeActivity : ComponentActivity() {
     }
 
 
-    // 5. Lógica del selector de contactos (sin cambios)
+    // 5. Lógica del selector de contactos
     private fun launchContactPicker() {
         val intent = Intent(Intent.ACTION_PICK).apply {
             type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
@@ -245,6 +264,10 @@ class HomeActivity : ComponentActivity() {
     }
 }
 
+// =============================================
+// COMPOSABLES (El resto del archivo no cambió)
+// =============================================
+
 // -----------------------------
 // HomeScreen: layout principal
 // -----------------------------
@@ -256,10 +279,13 @@ fun HomeScreen(
     onSosClick: () -> Unit,
     userName: String,
     emergencyContact: String?,
-    onSelectContact: () -> Unit
+    onSelectContact: () -> Unit,
+    showSosDialog: Boolean,
+    onDismissSosDialog: () -> Unit,
+    onConfirmSos: () -> Unit
 ) {
-    val scrollState = rememberScrollState() // ARREGLO DEL SCROLL
-    val coroutine = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val coroutine = rememberCoroutineScope() // Esta advertencia de "no usado" está bien
 
     Scaffold(
         topBar = {
@@ -301,14 +327,36 @@ fun HomeScreen(
             }
         },
         content = { innerPadding ->
+
+            if (showSosDialog) {
+                AlertDialog(
+                    onDismissRequest = { onDismissSosDialog() },
+                    title = { Text("Confirmación de Alerta SOS") },
+                    text = { Text("¿Estás seguro de que quieres activar la alerta? Se llamará automáticamente al 911 y se enviará un SMS de alerta a tu contacto de emergencia.") },
+                    confirmButton = {
+                        Button(
+                            onClick = { onConfirmSos() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("¡SÍ, ACTIVAR!")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { onDismissSosDialog() }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
             Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
-                .verticalScroll(scrollState) // ARREGLO DEL SCROLL
+                .verticalScroll(scrollState)
             ) {
 
-                Spacer(modifier = Modifier.height(16.dp)) // Espacio superior
+                Spacer(modifier = Modifier.height(16.dp))
                 AnimatedGreeting(userName = userName)
                 Spacer(modifier = Modifier.height(18.dp))
                 DiscoverCarousel()
@@ -323,7 +371,7 @@ fun HomeScreen(
                 QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout)
                 Spacer(modifier = Modifier.height(18.dp))
                 NatureStrip()
-                Spacer(modifier = Modifier.height(16.dp)) // Espacio inferior
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     )
