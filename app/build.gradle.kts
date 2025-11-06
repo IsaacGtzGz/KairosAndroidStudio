@@ -86,4 +86,10 @@ dependencies {
     // Para el carrusel (Pager) de Accompanist que usa la nueva HomeActivity
     implementation("com.google.accompanist:accompanist-pager:0.34.0")
     implementation("com.google.accompanist:accompanist-pager-indicators:0.34.0")
+
+    // Para cargar imágenes de forma asíncrona (como la foto de perfil)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Para tener la biblioteca completa de iconos (incluyendo Visibility)
+    implementation("androidx.compose.material:material-icons-extended")
 }
