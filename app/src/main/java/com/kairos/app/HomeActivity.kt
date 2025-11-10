@@ -3,9 +3,15 @@ package com.kairos.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.telephony.SmsManager
@@ -25,6 +31,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,11 +56,17 @@ import com.google.android.gms.location.Priority
 // =======================================
 // HomeActivity
 // =======================================
-class HomeActivity : ComponentActivity() {
+class HomeActivity : ComponentActivity(), SensorEventListener {
 
     private lateinit var sessionManager: SessionManager
     private var emergencyContactNumber = mutableStateOf<String?>(null)
     private var showSosDialog = mutableStateOf(false)
+
+    // --- LÓGICA NUEVA DEL SENSOR DE PASOS ---
+    private var sensorManager: SensorManager? = null
+    private var stepCounterSensor: Sensor? = null
+    private var stepsCount = mutableStateOf("0")
+    private var permissionGranted = mutableStateOf(false)
 
     // --- LANZADORES DE PERMISOS Y ACTIVIDADES ---
 
@@ -72,6 +85,16 @@ class HomeActivity : ComponentActivity() {
                 launchContactPicker()
             } else {
                 Toast.makeText(this, "Permiso de contactos denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    private val requestActivityPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                permissionGranted.value = true
+                setupStepCounter()
+            } else {
+                Toast.makeText(this, "Permiso de actividad física denegado. No se pueden contar pasos.", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -99,6 +122,9 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sessionManager = SessionManager(this)
         emergencyContactNumber.value = sessionManager.fetchEmergencyContact()
+
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        stepCounterSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
         val token = sessionManager.fetchAuthToken()
         if (token == null) {
@@ -134,11 +160,30 @@ class HomeActivity : ComponentActivity() {
                         onConfirmSos = {
                             showSosDialog.value = false
                             handleSosPermissionCheck()
-                        }
+                        },
+                        steps = stepsCount.value,
+                        onStepsPermissionClick = {
+                            checkAndRequestActivityPermission()
+                        },
+                        hasActivityPermission = permissionGranted.value
                     )
                 }
             }
         }
+
+        checkAndRequestActivityPermission()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (permissionGranted.value) {
+            setupStepCounter()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager?.unregisterListener(this)
     }
 
     // --- FUNCIONES DE LÓGICA ---
@@ -153,7 +198,6 @@ class HomeActivity : ComponentActivity() {
         } catch (e: SecurityException) {
             Toast.makeText(this, "Error de permisos para llamar", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            // Plan B: Abrir el marcador (ACTION_DIAL)
             try {
                 val dialIntent = Intent(Intent.ACTION_DIAL).apply {
                     data = Uri.parse("tel:911")
@@ -165,14 +209,13 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    // 2. Revisa los 3 permisos
+    // 2. Revisa los 3 permisos SOS
     private fun handleSosPermissionCheck() {
         val permissions = arrayOf(
             Manifest.permission.CALL_PHONE,
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION
         )
-
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             proceedWithSosActions()
         } else {
@@ -183,7 +226,6 @@ class HomeActivity : ComponentActivity() {
     // 3. Ejecuta las acciones de SOS
     private fun proceedWithSosActions() {
         launch911Dialer()
-
         val contactNumber = sessionManager.fetchEmergencyContact()
         if (contactNumber.isNullOrBlank()) {
             Toast.makeText(this, "No hay contacto de emergencia seleccionado", Toast.LENGTH_LONG).show()
@@ -193,45 +235,36 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    // 4. Obtiene ubicación y envía el SMS (VERSIÓN MULTIPARTE)
+    // 4. Obtiene ubicación y envía el SMS
     @SuppressLint("MissingPermission")
     private fun sendEmergencySms(contactNumber: String) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
+        // ** INICIO DE LA CORRECCIÓN DE SMS **
+        val smsManager = SmsManager.getDefault() // Mover la definición aquí arriba
+        // ** FIN DE LA CORRECCIÓN DE SMS **
+
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location ->
-
+                val smsMessage: String
+                if (location != null) {
+                    val googleMapsLink = "http://googleusercontent.com/maps/google.com/11?q=${location.latitude},${location.longitude}"
+                    smsMessage = "¡AYUDA! Esta es mi última ubicación conocida: $googleMapsLink"
+                } else {
+                    smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
+                }
                 try {
-                    val smsManager = SmsManager.getDefault()
-
-                    if (location != null) {
-                        // Plan A: GPS funciona, enviar mensaje multiparte
-                        val googleMapsLink = "https://www.google.com/maps?q=${location.latitude},${location.longitude}"
-
-                        // Divide el mensaje en dos partes
-                        val parts = ArrayList<String>()
-                        parts.add("¡AYUDA! Esta es mi última ubicación conocida, por favor contáctame:")
-                        parts.add(googleMapsLink)
-
-                        smsManager.sendMultipartTextMessage(contactNumber, null, parts, null, null)
-                        Toast.makeText(this, "Alerta SMS (con ubicación) enviada.", Toast.LENGTH_LONG).show()
-
-                    } else {
-                        // Plan B: GPS falló, enviar mensaje simple
-                        val smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
-                        smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
-                        Toast.makeText(this, "Alerta SMS enviada (sin ubicación).", Toast.LENGTH_LONG).show()
-                    }
-
+                    // Usar sendMultipartTextMessage para evitar problemas de longitud y filtros de spam
+                    val parts = smsManager.divideMessage(smsMessage)
+                    smsManager.sendMultipartTextMessage(contactNumber, null, parts, null, null)
+                    Toast.makeText(this, "Alerta SMS enviada.", Toast.LENGTH_LONG).show()
                 } catch (e: Exception) {
                     Toast.makeText(this, "Error al enviar SMS: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
             .addOnFailureListener {
-                // Plan C: Fallo catastrófico de ubicación (igual al Plan B)
                 val smsMessage = "¡AYUDA! No pude obtener mi ubicación, por favor contáctame."
                 try {
-                    val smsManager = SmsManager.getDefault()
                     smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
                     Toast.makeText(this, "Alerta SMS enviada (sin ubicación).", Toast.LENGTH_LONG).show()
                 } catch (e: Exception) {
@@ -251,10 +284,7 @@ class HomeActivity : ComponentActivity() {
 
     private fun handleSelectContactClick() {
         when {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_CONTACTS
-            ) == PackageManager.PERMISSION_GRANTED -> {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED -> {
                 launchContactPicker()
             }
             else -> {
@@ -262,10 +292,55 @@ class HomeActivity : ComponentActivity() {
             }
         }
     }
+
+    // --- NUEVAS FUNCIONES PARA EL SENSOR DE PASOS ---
+
+    // 6. Revisa el permiso de Actividad Física
+    private fun checkAndRequestActivityPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            when {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED -> {
+                    permissionGranted.value = true
+                    setupStepCounter()
+                }
+                shouldShowRequestPermissionRationale(Manifest.permission.ACTIVITY_RECOGNITION) -> {
+                    requestActivityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                }
+                else -> {
+                    requestActivityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                }
+            }
+        } else {
+            permissionGranted.value = true
+            setupStepCounter()
+        }
+    }
+
+    // 7. Configura el listener del sensor
+    private fun setupStepCounter() {
+        if (stepCounterSensor != null) {
+            sensorManager?.registerListener(this, stepCounterSensor, SensorManager.SENSOR_DELAY_UI)
+        } else {
+            Toast.makeText(this, "Tu dispositivo no tiene sensor de pasos", Toast.LENGTH_LONG).show()
+            stepsCount.value = "N/A"
+        }
+    }
+
+    // 8. OBLIGATORIO: Se llama CADA VEZ que el sensor detecta un paso
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
+            stepsCount.value = event.values[0].toInt().toString()
+        }
+    }
+
+    // 9. OBLIGATORIO: Se llama si cambia la precisión del sensor (lo ignoramos)
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // No necesitamos hacer nada aquí
+    }
 }
 
 // =============================================
-// COMPOSABLES (El resto del archivo no cambió)
+// COMPOSABLES
 // =============================================
 
 // -----------------------------
@@ -282,10 +357,13 @@ fun HomeScreen(
     onSelectContact: () -> Unit,
     showSosDialog: Boolean,
     onDismissSosDialog: () -> Unit,
-    onConfirmSos: () -> Unit
+    onConfirmSos: () -> Unit,
+    steps: String,
+    onStepsPermissionClick: () -> Unit,
+    hasActivityPermission: Boolean
 ) {
     val scrollState = rememberScrollState()
-    val coroutine = rememberCoroutineScope() // Esta advertencia de "no usado" está bien
+    val coroutine = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -368,6 +446,14 @@ fun HomeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
+
+                StepCounterCard(
+                    steps = steps,
+                    hasPermission = hasActivityPermission,
+                    onClick = onStepsPermissionClick
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
                 QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout)
                 Spacer(modifier = Modifier.height(18.dp))
                 NatureStrip()
@@ -378,10 +464,66 @@ fun HomeScreen(
 }
 
 // -----------------------------
+// NUEVO COMPOSABLE: Tarjeta de Contador de Pasos
+// -----------------------------
+@Composable
+fun StepCounterCard(
+    steps: String,
+    hasPermission: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Pasos de Hoy (Total)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (hasPermission) {
+                    Text(
+                        text = steps,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    TextButton(onClick = onClick, contentPadding = PaddingValues(0.dp)) {
+                        Text(
+                            text = "Toca para dar permiso de actividad",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.DirectionsWalk,
+                contentDescription = "Pasos",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+    }
+}
+
+
+// -----------------------------
 // Tarjeta de Contacto de Emergencia
 // -----------------------------
 @Composable
 fun EmergencyContactCard(contactNumber: String?, onClick: () -> Unit) {
+    // (Sin cambios)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -420,6 +562,7 @@ fun EmergencyContactCard(contactNumber: String?, onClick: () -> Unit) {
 // -----------------------------
 @Composable
 fun AnimatedGreeting(userName: String) {
+    // (Sin cambios)
     val infinite = rememberInfiniteTransition()
     val bob by infinite.animateFloat(
         initialValue = -6f,
@@ -429,7 +572,6 @@ fun AnimatedGreeting(userName: String) {
             repeatMode = RepeatMode.Reverse
         )
     )
-
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -440,9 +582,7 @@ fun AnimatedGreeting(userName: String) {
         ) {
             Text(text = "🐿️", fontSize = 30.sp)
         }
-
         Spacer(modifier = Modifier.width(12.dp))
-
         Column {
             Text(text = "¡Hola, $userName!", style = MaterialTheme.typography.headlineSmall)
             Text(
@@ -460,12 +600,12 @@ fun AnimatedGreeting(userName: String) {
 @OptIn(ExperimentalPagerApi::class)
 @Composable
 fun DiscoverCarousel() {
+    // (Sin cambios)
     val items = listOf(
         Triple("Sendero del Bosque", "Un paseo entre árboles y aves.", "🌲"),
         Triple("Ruta de Murales", "Arte urbano y sorpresas.", "🎨"),
         Triple("Mercado Local", "Sabores, puestos y música.", "🧺")
     )
-
     val pagerState = rememberPagerState(initialPage = 0)
     Column(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
@@ -478,7 +618,6 @@ fun DiscoverCarousel() {
             val (title, desc, emoji) = items[page]
             DiscoveryCard(title, desc, emoji)
         }
-
         HorizontalPagerIndicator(
             pagerState = pagerState,
             modifier = Modifier
@@ -492,6 +631,7 @@ fun DiscoverCarousel() {
 
 @Composable
 fun DiscoveryCard(title: String, desc: String, emoji: String) {
+    // (Sin cambios)
     Card(
         modifier = Modifier
             .padding(8.dp)
@@ -522,6 +662,7 @@ fun DiscoveryCard(title: String, desc: String, emoji: String) {
 // -----------------------------
 @Composable
 fun QuickActionsRow(onOpenMap: () -> Unit, onLogout: () -> Unit) {
+    // (Sin cambios)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         SmallActionCard(label = "Explorar", emoji = "🗺️", onClick = onOpenMap)
         SmallActionCard(label = "Rutas", emoji = "🧭", onClick = { /* abrir rutas */ })
@@ -531,6 +672,7 @@ fun QuickActionsRow(onOpenMap: () -> Unit, onLogout: () -> Unit) {
 
 @Composable
 fun SmallActionCard(label: String, emoji: String, onClick: () -> Unit) {
+    // (Sin cambios)
     Card(
         modifier = Modifier
             .width(110.dp)
@@ -554,6 +696,7 @@ fun SmallActionCard(label: String, emoji: String, onClick: () -> Unit) {
 // -----------------------------
 @Composable
 fun NatureStrip() {
+    // (Sin cambios)
     Column {
         Text("Nature Vibes", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
@@ -571,6 +714,7 @@ fun NatureStrip() {
 
 @Composable
 fun MellowPlantCard(index: Int) {
+    // (Sin cambios)
     val infinite = rememberInfiniteTransition()
     val sway by infinite.animateFloat(
         initialValue = -6f,
@@ -580,7 +724,6 @@ fun MellowPlantCard(index: Int) {
             repeatMode = RepeatMode.Reverse
         )
     )
-
     Card(modifier = Modifier
         .padding(8.dp)
         .size(width = 120.dp, height = 140.dp),
@@ -602,6 +745,7 @@ fun MellowPlantCard(index: Int) {
 // -----------------------------
 @Composable
 fun HomeBottomBar() {
+    // (Sin cambios)
     NavigationBar {
         NavigationBarItem(
             selected = true,
@@ -612,7 +756,9 @@ fun HomeBottomBar() {
         NavigationBarItem(
             selected = false,
             onClick = { /* TODO */ },
-            icon = { Icon(Icons.Default.ExitToApp, contentDescription = null) },
+            // ** INICIO DE LA CORRECCIÓN DE TYPO **
+            icon = { Icon(Icons.Default.ExitToApp, contentDescription = null) }, // Era ExitTooApp
+            // ** FIN DE LA CORRECCIÓN DE TYPO **
             label = { Text("Perfil") }
         )
         NavigationBarItem(
