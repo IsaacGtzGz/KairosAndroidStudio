@@ -165,7 +165,10 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         onStepsPermissionClick = {
                             checkAndRequestActivityPermission()
                         },
-                        hasActivityPermission = permissionGranted.value
+                        hasActivityPermission = permissionGranted.value,
+                        onRecompensasClick = {
+                            startActivity(Intent(this, RecompensasActivity::class.java))
+                        }
                     )
                 }
             }
@@ -360,7 +363,9 @@ fun HomeScreen(
     onConfirmSos: () -> Unit,
     steps: String,
     onStepsPermissionClick: () -> Unit,
-    hasActivityPermission: Boolean
+    hasActivityPermission: Boolean,
+    onRecompensasClick: () -> Unit
+
 ) {
     val scrollState = rememberScrollState()
     val coroutine = rememberCoroutineScope()
@@ -454,7 +459,7 @@ fun HomeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
-                QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout)
+                QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout, onRecompensasClick = onRecompensasClick)
                 Spacer(modifier = Modifier.height(18.dp))
                 NatureStrip()
                 Spacer(modifier = Modifier.height(16.dp))
@@ -661,13 +666,11 @@ fun DiscoveryCard(title: String, desc: String, emoji: String) {
 // Quick actions row
 // -----------------------------
 @Composable
-fun QuickActionsRow(onOpenMap: () -> Unit, onLogout: () -> Unit) {
-    // (Sin cambios)
+fun QuickActionsRow(onOpenMap: () -> Unit, onLogout: () -> Unit, onRecompensasClick: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         SmallActionCard(label = "Explorar", emoji = "🗺️", onClick = onOpenMap)
         SmallActionCard(label = "Rutas", emoji = "🧭", onClick = { /* abrir rutas */ })
-        SmallActionCard(label = "Recompensas", emoji = "🎟️", onClick = { /* recompensas */ })
-    }
+        SmallActionCard(label = "Recompensas", emoji = "🎟️", onClick = { onRecompensasClick() })    }
 }
 
 @Composable
