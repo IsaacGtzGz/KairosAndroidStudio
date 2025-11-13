@@ -42,10 +42,7 @@
         <activity android:name=".HomeActivity" />
         <activity android:name=".MapActivity" />
 
-        <activity
-            android:name=".RecompensasActivity"
-            android:theme="@style/Theme.Kairos"
-            android:exported="false" />
+        <activity android:name=".RecompensasActivity" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
