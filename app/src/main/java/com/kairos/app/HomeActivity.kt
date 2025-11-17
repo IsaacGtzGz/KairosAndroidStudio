@@ -52,6 +52,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import android.app.AppOpsManager
+import android.os.Process
+import android.provider.Settings
+import androidx.compose.material.icons.filled.QueryStats
+
+import android.app.usage.UsageStatsManager
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 // =======================================
 // HomeActivity
@@ -62,14 +70,20 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
     private var emergencyContactNumber = mutableStateOf<String?>(null)
     private var showSosDialog = mutableStateOf(false)
 
-    // --- LÓGICA NUEVA DEL SENSOR DE PASOS ---
+    // --- LÓGICA DEL SENSOR DE PASOS ---
     private var sensorManager: SensorManager? = null
     private var stepCounterSensor: Sensor? = null
     private var stepsCount = mutableStateOf("0")
     private var permissionGranted = mutableStateOf(false)
 
-    // --- LANZADORES DE PERMISOS Y ACTIVIDADES ---
+    // Estado para saber si tenemos el permiso
+    private var hasUsagePermission = mutableStateOf(false)
 
+    // otras variables
+    private var socialMediaUsageTime = mutableStateOf("0 min")
+
+
+    // --- LANZADORES DE PERMISOS Y ACTIVIDADES ---
     private val requestSosPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             if (permissions.all { it.value }) {
@@ -96,6 +110,12 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             } else {
                 Toast.makeText(this, "Permiso de actividad física denegado. No se pueden contar pasos.", Toast.LENGTH_LONG).show()
             }
+        }
+
+    private val usageStatsSettingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            // Cuando el usuario regresa, volvemos a checar el permiso
+            checkUsageStatsPermission()
         }
 
     @SuppressLint("Range")
@@ -168,13 +188,24 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         hasActivityPermission = permissionGranted.value,
                         onRecompensasClick = {
                             startActivity(Intent(this, RecompensasActivity::class.java))
+                        },
+                        usageTime = socialMediaUsageTime.value,
+                        hasUsagePermission = hasUsagePermission.value,
+                        onUsagePermissionClick = {
+                            if (hasUsagePermission.value) {
+                                // SI YA TIENE PERMISO -> ABRE EL DETALLE
+                                startActivity(Intent(this, UsageDetailActivity::class.java))
+                            } else {
+                                // SI NO TIENE PERMISO -> PÍDELO
+                                requestUsageStatsPermission()
+                            }
                         }
                     )
                 }
             }
         }
-
         checkAndRequestActivityPermission()
+        checkUsageStatsPermission()
     }
 
     override fun onResume() {
@@ -182,6 +213,9 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         if (permissionGranted.value) {
             setupStepCounter()
         }
+        // Checar permiso y calcular tiempo al volver
+        checkUsageStatsPermission()
+        getSocialMediaUsage()
     }
 
     override fun onPause() {
@@ -223,6 +257,35 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             proceedWithSosActions()
         } else {
             requestSosPermissionsLauncher.launch(permissions)
+        }
+    }
+
+    // --- NUEVAS FUNCIONES PARA EL MONITOR DE USO ---
+
+    // 1. Revisa si tenemos el permiso PACKAGE_USAGE_STATS
+    private fun checkUsageStatsPermission() {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            packageName
+        )
+        // Actualizamos nuestro estado
+        hasUsagePermission.value = (mode == AppOpsManager.MODE_ALLOWED)
+
+        // Si ya tenemos permiso, calculamos el tiempo
+        if (hasUsagePermission.value) {
+            getSocialMediaUsage()
+        }
+    }
+
+    // 2. Abre la pantalla de Ajustes del sistema para que el usuario dé el permiso
+    private fun requestUsageStatsPermission() {
+        try {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            usageStatsSettingsLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo abrir la pantalla de ajustes", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -283,6 +346,50 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
         }
         contactPickerLauncher.launch(intent)
+    }
+
+    // 3. Calcula el tiempo en apps de "Scroll Infinito" hoy
+    private fun getSocialMediaUsage() {
+        if (!hasUsagePermission.value) return
+
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val calendar = Calendar.getInstance()
+        val endTime = calendar.timeInMillis
+
+        // Ponemos el calendario al inicio del día (00:00 hrs)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        val startTime = calendar.timeInMillis
+
+        // Pedimos las estadísticas diarias
+        val queryUsageStats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY, startTime, endTime
+        )
+
+        // Lista de paquetes (Scroll Infinito)
+        val socialPackages = listOf(
+            "com.facebook.katana",      // Facebook
+            "com.google.android.youtube", // YouTube
+            "com.twitter.android",      // X (Twitter)
+            "com.snapchat.android",      // Snapchat
+            "com.zhiliaoapp.musically", // TikTok
+            "com.instagram.android",    // Instagram
+        )
+
+        var totalTimeMillis = 0L
+
+        for (app in queryUsageStats) {
+            if (socialPackages.contains(app.packageName)) {
+                totalTimeMillis += app.totalTimeInForeground
+            }
+        }
+
+        // Convertimos milisegundos a texto bonito (Ej: "2h 15m")
+        val hours = TimeUnit.MILLISECONDS.toHours(totalTimeMillis)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(totalTimeMillis) % 60
+
+        socialMediaUsageTime.value = if (hours > 0) "${hours}h ${minutes}m" else "${minutes} min"
     }
 
     private fun handleSelectContactClick() {
@@ -364,8 +471,10 @@ fun HomeScreen(
     steps: String,
     onStepsPermissionClick: () -> Unit,
     hasActivityPermission: Boolean,
-    onRecompensasClick: () -> Unit
-
+    onRecompensasClick: () -> Unit,
+    hasUsagePermission: Boolean,
+    onUsagePermissionClick: () -> Unit,
+    usageTime: String
 ) {
     val scrollState = rememberScrollState()
     val coroutine = rememberCoroutineScope()
@@ -457,6 +566,15 @@ fun HomeScreen(
                     hasPermission = hasActivityPermission,
                     onClick = onStepsPermissionClick
                 )
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Tarjeta de Monitor de Uso
+                UsageMonitorCard(
+                    hasPermission = hasUsagePermission,
+                    usageTime = usageTime,
+                    onClick = onUsagePermissionClick
+                )
+
 
                 Spacer(modifier = Modifier.height(18.dp))
                 QuickActionsRow(onOpenMap = onOpenMap, onLogout = onLogout, onRecompensasClick = onRecompensasClick)
@@ -773,6 +891,65 @@ fun HomeBottomBar() {
     }
 }
 
+// -----------------------------
+// NUEVO COMPOSABLE: Tarjeta de Monitor de Uso
+// -----------------------------
+@Composable
+fun UsageMonitorCard(
+    hasPermission: Boolean,
+    usageTime: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Tiempo en Redes (Hoy)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (hasPermission) {
+                    Text(
+                        text = usageTime,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                            text = "Apps de scroll infinito",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // Si no tiene permiso, muestra un botón para ir a Ajustes
+                    TextButton(onClick = onClick, contentPadding = PaddingValues(0.dp)) {
+                        Text(
+                            text = "Toca para dar permiso de uso de apps",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.QueryStats,
+                contentDescription = "Monitor de Uso",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+    }
+}
 
 // -----------------------------
 // Helpers: easing
