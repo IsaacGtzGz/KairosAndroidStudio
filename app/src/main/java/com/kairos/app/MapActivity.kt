@@ -3,7 +3,6 @@ package com.kairos.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -13,13 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator // 👈 IMPORT NUEVO
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,26 +34,32 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.kairos.app.models.Lugar
+import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MapActivity : ComponentActivity() {
 
-    // El estado de la ubicación Y el estado de carga
+    // Estados
     private var userLocation by mutableStateOf<LatLng?>(null)
     private var isLoading by mutableStateOf(true)
+    // Lista de lugares traída de la API
+    private var lugaresList by mutableStateOf<List<Lugar>>(emptyList())
 
     private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
 
-    // Lanzador para pedir permisos DE UBICACIÓN
+    // Lanzador para pedir permisos
     private val requestPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { isGranted: Boolean ->
             if (isGranted) {
-                // Permiso concedido, obtenemos ubicación
                 getDeviceLocation()
             } else {
-                // Permiso denegado, usamos default y dejamos de cargar
                 Toast.makeText(this, "Permiso denegado, usando ubicación default", Toast.LENGTH_LONG).show()
                 userLocation = defaultLocation
                 isLoading = false
@@ -63,20 +69,18 @@ class MapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. SETCONTENT SE LLAMA INMEDIATAMENTE
+        // 1. Iniciar carga de mapa y DATOS de la API
+        fetchLugaresFromApi()
+
         setContent {
             KairosTheme {
-                // El POI simulado
-                val poiLocation = LatLng(21.1305, -101.6720)
-
-                // Este Composable ahora decide si muestra "Cargando" o el Mapa
                 MapScreenRoot(
                     isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
-                    poiLocation = poiLocation,
-                    onNavigateClick = {
-                        // Acción para el botón "Cómo llegar"
-                        val gmmIntentUri = Uri.parse("google.navigation:q=${poiLocation.latitude},${poiLocation.longitude}")
+                    lugares = lugaresList, // Pasamos la lista real
+                    onNavigateClick = { lat, lng ->
+                        // Acción dinámica para navegar al lugar seleccionado
+                        val gmmIntentUri = android.net.Uri.parse("google.navigation:q=$lat,$lng")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                         mapIntent.setPackage("com.google.android.apps.maps")
                         startActivity(mapIntent)
@@ -85,8 +89,39 @@ class MapActivity : ComponentActivity() {
             }
         }
 
-        // 2. DESPUÉS de dibujar, pedimos el permiso
         checkLocationPermission()
+    }
+
+    // Función para pedir los datos a la API
+    private fun fetchLugaresFromApi() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = RetrofitClient.instance.getLugares()
+                if (response.isSuccessful && response.body() != null) {
+                    withContext(Dispatchers.Main) {
+                        // 👇 CAMBIO AQUÍ: Extraemos la lista usando .values
+                        lugaresList = response.body()!!.values
+
+                        // Un pequeño Toast para confirmar que llegaron datos
+                        if (lugaresList.isNotEmpty()) {
+                            Toast.makeText(this@MapActivity, "¡Lugares cargados!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this@MapActivity, "No hay lugares en la BD", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MapActivity, "Error al cargar lugares: ${response.code()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    // Log del error real para debug
+                    e.printStackTrace()
+                    Toast.makeText(this@MapActivity, "Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     private fun checkLocationPermission() {
@@ -95,7 +130,6 @@ class MapActivity : ComponentActivity() {
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED -> {
-                // Ya tienes permiso
                 getDeviceLocation()
             }
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
@@ -107,7 +141,6 @@ class MapActivity : ComponentActivity() {
         }
     }
 
-    // 3. Esta función AHORA SOLO actualiza los estados
     private fun getDeviceLocation() {
         try {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -116,36 +149,32 @@ class MapActivity : ComponentActivity() {
                     userLocation = if (location != null) {
                         LatLng(location.latitude, location.longitude)
                     } else {
-                        Toast.makeText(this, "No se pudo obtener ubicación, usando default", Toast.LENGTH_SHORT).show()
                         defaultLocation
                     }
-                    isLoading = false // 👈 AVISAMOS QUE DEJE DE CARGAR
+                    isLoading = false
                 }
                 .addOnFailureListener {
-                    Toast.makeText(this, "Error al obtener ubicación, usando default", Toast.LENGTH_SHORT).show()
                     userLocation = defaultLocation
-                    isLoading = false // 👈 AVISAMOS QUE DEJE DE CARGAR
+                    isLoading = false
                 }
         } catch (e: SecurityException) {
-            Toast.makeText(this, "Error de seguridad: ${e.message}", Toast.LENGTH_SHORT).show()
-            finish()
+            isLoading = false
         }
     }
 }
 
 // -----------------------------------------------------------------
-// NUEVO COMPOSABLE "ROOT" (RAÍZ)
-// Decide si mostrar "Cargando" o el mapa real
+// COMPOSABLES
 // -----------------------------------------------------------------
+
 @Composable
 fun MapScreenRoot(
     isLoading: Boolean,
     userLocation: LatLng,
-    poiLocation: LatLng,
-    onNavigateClick: () -> Unit
+    lugares: List<Lugar>,
+    onNavigateClick: (Double, Double) -> Unit
 ) {
     if (isLoading) {
-        // Muestra un círculo de "Cargando..." en el centro
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -153,34 +182,30 @@ fun MapScreenRoot(
             CircularProgressIndicator()
         }
     } else {
-        // Ya no está cargando, muestra el mapa
         ActualMapScreen(
             userLocation = userLocation,
-            poiLocation = poiLocation,
+            lugares = lugares,
             onNavigateClick = onNavigateClick
         )
     }
 }
 
-
-// -----------------------------------------------------------------
-// Este es el Composable que ANTES se llamaba "MapScreen"
-// Ahora solo se encarga de dibujar el mapa
-// -----------------------------------------------------------------
 @Composable
 fun ActualMapScreen(
     userLocation: LatLng,
-    poiLocation: LatLng,
-    onNavigateClick: () -> Unit
+    lugares: List<Lugar>,
+    onNavigateClick: (Double, Double) -> Unit
 ) {
+    // Estado para guardar el lugar seleccionado actualmente (para el botón de navegar)
+    var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
+
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(userLocation, 15f)
+        position = CameraPosition.fromLatLngZoom(userLocation, 14f)
     }
 
-    // Anima la cámara a la posición del usuario cuando se carga
     LaunchedEffect(userLocation) {
         cameraPositionState.animate(
-            com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(userLocation, 15f)
+            com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(userLocation, 14f)
         )
     }
 
@@ -190,29 +215,38 @@ fun ActualMapScreen(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
                 properties = MapProperties(isMyLocationEnabled = true),
-                uiSettings = MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false)
+                uiSettings = MapUiSettings(myLocationButtonEnabled = true, zoomControlsEnabled = false)
             ) {
-                // Marcador de tu ubicación
-                Marker(
-                    state = MarkerState(position = userLocation),
-                    title = "Tu ubicación"
-                )
-                // Marcador del POI simulado
-                Marker(
-                    state = MarkerState(position = poiLocation),
-                    title = "Parque Explora (Simulado)",
-                    snippet = "¡Un lugar genial!"
-                )
+                // Marcador de TU ubicación (opcional, ya sale el punto azul con isMyLocationEnabled)
+
+                // PINTAR TODOS LOS LUGARES DE LA BD
+                lugares.forEach { lugar ->
+                    Marker(
+                        state = MarkerState(position = LatLng(lugar.latitud, lugar.longitud)),
+                        title = lugar.nombre,
+                        snippet = lugar.descripcion ?: "Sin descripción",
+                        onClick = {
+                            selectedLugar = lugar // Guardamos cuál se tocó
+                            false // false para permitir el comportamiento default (mostrar info window)
+                        }
+                    )
+                }
             }
 
-            // Botón flotante para "Cómo llegar"
-            Button(
-                onClick = onNavigateClick,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(24.dp)
-            ) {
-                Text(text = "Cómo llegar")
+            // Botón flotante "Cómo llegar" (Solo aparece si | un lugar)
+            if (selectedLugar != null) {
+                Button(
+                    onClick = {
+                        selectedLugar?.let {
+                            onNavigateClick(it.latitud, it.longitud)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(24.dp)
+                ) {
+                    Text(text = "Ir a: ${selectedLugar?.nombre}")
+                }
             }
         }
     }
