@@ -27,4 +27,21 @@ class SessionManager(context: Context) {
     fun clearSession() {
         prefs.edit().clear().apply()
     }
+
+    // --- LÓGICA DE PASOS DIARIOS ---
+    fun saveStepsBaseline(steps: Int) {
+        prefs.edit().putInt("steps_baseline", steps).apply()
+    }
+
+    fun fetchStepsBaseline(): Int {
+        return prefs.getInt("steps_baseline", -1) // -1 significa que no hay dato guardado
+    }
+
+    fun saveStepsDate(date: String) {
+        prefs.edit().putString("steps_date", date).apply()
+    }
+
+    fun fetchStepsDate(): String? {
+        return prefs.getString("steps_date", null)
+    }
 }

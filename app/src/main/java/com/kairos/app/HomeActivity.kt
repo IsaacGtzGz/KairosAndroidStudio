@@ -61,6 +61,10 @@ import android.app.usage.UsageStatsManager
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 // =======================================
 // HomeActivity
 // =======================================
@@ -439,7 +443,42 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
     // 8. OBLIGATORIO: Se llama CADA VEZ que el sensor detecta un paso
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-            stepsCount.value = event.values[0].toInt().toString()
+            val totalStepsSensor = event.values[0].toInt()
+
+            // 1. Obtener la fecha de hoy (ej. "2025-11-17")
+            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+            // 2. Obtener lo guardado
+            val savedDate = sessionManager.fetchStepsDate()
+            val savedBaseline = sessionManager.fetchStepsBaseline()
+
+            var stepsToDisplay = 0
+
+            if (savedDate != todayDate) {
+                // ¡ES UN NUEVO DÍA! (O es la primera vez)
+                // Reiniciamos el conteo: El valor actual del sensor se vuelve el nuevo "cero" (baseline)
+                sessionManager.saveStepsDate(todayDate)
+                sessionManager.saveStepsBaseline(totalStepsSensor)
+                stepsToDisplay = 0
+            } else {
+                // ES EL MISMO DÍA
+                if (savedBaseline == -1) {
+                    // Caso raro: tenemos fecha pero no baseline, reseteamos
+                    sessionManager.saveStepsBaseline(totalStepsSensor)
+                    stepsToDisplay = 0
+                } else if (totalStepsSensor < savedBaseline) {
+                    // CASO REINICIO: El celular se apagó y el sensor volvió a 0.
+                    // El baseline anterior ya no sirve. Reseteamos el baseline al nuevo valor bajo.
+                    sessionManager.saveStepsBaseline(totalStepsSensor)
+                    stepsToDisplay = 0
+                } else {
+                    // CÁLCULO NORMAL: Restamos el valor inicial del día al valor actual
+                    stepsToDisplay = totalStepsSensor - savedBaseline
+                }
+            }
+
+            // Actualizamos la UI
+            stepsCount.value = stepsToDisplay.toString()
         }
     }
 
