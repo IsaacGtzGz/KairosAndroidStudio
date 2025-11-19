@@ -77,13 +77,18 @@ class MapActivity : ComponentActivity() {
                 MapScreenRoot(
                     isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
-                    lugares = lugaresList, // Pasamos la lista real
-                    onNavigateClick = { lat, lng ->
-                        // Acción dinámica para navegar al lugar seleccionado
-                        val gmmIntentUri = android.net.Uri.parse("google.navigation:q=$lat,$lng")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                        mapIntent.setPackage("com.google.android.apps.maps")
-                        startActivity(mapIntent)
+                    lugares = lugaresList,
+                    onNavigateClick = { lugar ->  // RECIBIMOS EL OBJETO LUGAR COMPLETO
+                        val intent = Intent(this, DetalleLugarActivity::class.java).apply {
+                            putExtra("nombre", lugar.nombre)
+                            putExtra("descripcion", lugar.descripcion)
+                            putExtra("direccion", lugar.direccion)
+                            putExtra("horario", lugar.horario)
+                            putExtra("imagen", lugar.imagen)
+                            putExtra("lat", lugar.latitud)
+                            putExtra("lng", lugar.longitud)
+                        }
+                        startActivity(intent)
                     }
                 )
             }
@@ -172,7 +177,7 @@ fun MapScreenRoot(
     isLoading: Boolean,
     userLocation: LatLng,
     lugares: List<Lugar>,
-    onNavigateClick: (Double, Double) -> Unit
+    onNavigateClick: (Lugar) -> Unit
 ) {
     if (isLoading) {
         Box(
@@ -194,7 +199,7 @@ fun MapScreenRoot(
 fun ActualMapScreen(
     userLocation: LatLng,
     lugares: List<Lugar>,
-    onNavigateClick: (Double, Double) -> Unit
+    onNavigateClick: (Lugar) -> Unit
 ) {
     // Estado para guardar el lugar seleccionado actualmente (para el botón de navegar)
     var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
@@ -233,19 +238,19 @@ fun ActualMapScreen(
                 }
             }
 
-            // Botón flotante "Cómo llegar" (Solo aparece si | un lugar)
+            // Botón flotante "Ver Detalle"
             if (selectedLugar != null) {
                 Button(
                     onClick = {
                         selectedLugar?.let {
-                            onNavigateClick(it.latitud, it.longitud)
+                            onNavigateClick(it) // 👈 AHORA PASAMOS EL OBJETO
                         }
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(24.dp)
                 ) {
-                    Text(text = "Ir a: ${selectedLugar?.nombre}")
+                    Text(text = "Ver: ${selectedLugar?.nombre}")
                 }
             }
         }

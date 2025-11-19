@@ -8,5 +8,6 @@ data class Lugar(
     val longitud: Double,
     val direccion: String?,
     val imagen: String?,
-    val idCategoria: Int
+    val idCategoria: Int,
+    val horario: String?
 )

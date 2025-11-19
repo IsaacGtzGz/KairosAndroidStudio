@@ -47,8 +47,8 @@
         <activity android:name=".MapActivity" />
 
         <activity android:name=".RecompensasActivity" />
-
         <activity android:name=".UsageDetailActivity" />
+        <activity android:name=".DetalleLugarActivity" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
