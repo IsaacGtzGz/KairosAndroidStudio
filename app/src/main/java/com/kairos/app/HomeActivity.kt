@@ -379,6 +379,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             "com.snapchat.android",      // Snapchat
             "com.zhiliaoapp.musically", // TikTok
             "com.instagram.android",    // Instagram
+            "com.whatsapp"              // Wpp
         )
 
         var totalTimeMillis = 0L
