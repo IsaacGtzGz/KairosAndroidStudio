@@ -8,21 +8,26 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings // 👈 Ícono de Tuerca
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
@@ -44,15 +49,11 @@ import kotlinx.coroutines.withContext
 
 class MapActivity : ComponentActivity() {
 
-    // Estados
     private var userLocation by mutableStateOf<LatLng?>(null)
     private var isLoading by mutableStateOf(true)
-    // Lista de lugares traída de la API
     private var lugaresList by mutableStateOf<List<Lugar>>(emptyList())
+    private val defaultLocation = LatLng(21.1290, -101.6700)
 
-    private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
-
-    // Lanzador para pedir permisos
     private val requestPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -60,7 +61,7 @@ class MapActivity : ComponentActivity() {
             if (isGranted) {
                 getDeviceLocation()
             } else {
-                Toast.makeText(this, "Permiso denegado, usando ubicación default", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Ubicación denegada", Toast.LENGTH_LONG).show()
                 userLocation = defaultLocation
                 isLoading = false
             }
@@ -69,7 +70,6 @@ class MapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Iniciar carga de mapa y DATOS de la API
         fetchLugaresFromApi()
 
         setContent {
@@ -78,7 +78,7 @@ class MapActivity : ComponentActivity() {
                     isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
                     lugares = lugaresList,
-                    onNavigateClick = { lugar ->  // RECIBIMOS EL OBJETO LUGAR COMPLETO
+                    onNavigateClick = { lugar ->
                         val intent = Intent(this, DetalleLugarActivity::class.java).apply {
                             putExtra("nombre", lugar.nombre)
                             putExtra("descripcion", lugar.descripcion)
@@ -89,6 +89,9 @@ class MapActivity : ComponentActivity() {
                             putExtra("lng", lugar.longitud)
                         }
                         startActivity(intent)
+                    },
+                    onProfileSettingsClick = {
+                        Toast.makeText(this, "Ir a Configuración de Intereses (Próximamente)", Toast.LENGTH_SHORT).show()
                     }
                 )
             }
@@ -97,33 +100,18 @@ class MapActivity : ComponentActivity() {
         checkLocationPermission()
     }
 
-    // Función para pedir los datos a la API
     private fun fetchLugaresFromApi() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = RetrofitClient.instance.getLugares()
                 if (response.isSuccessful && response.body() != null) {
                     withContext(Dispatchers.Main) {
-                        // 👇 CAMBIO AQUÍ: Extraemos la lista usando .values
                         lugaresList = response.body()!!.values
-
-                        // Un pequeño Toast para confirmar que llegaron datos
-                        if (lugaresList.isNotEmpty()) {
-                            Toast.makeText(this@MapActivity, "¡Lugares cargados!", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(this@MapActivity, "No hay lugares en la BD", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MapActivity, "Error al cargar lugares: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    // Log del error real para debug
                     e.printStackTrace()
-                    Toast.makeText(this@MapActivity, "Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -131,10 +119,7 @@ class MapActivity : ComponentActivity() {
 
     private fun checkLocationPermission() {
         when {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED -> {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> {
                 getDeviceLocation()
             }
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
@@ -149,69 +134,67 @@ class MapActivity : ComponentActivity() {
     private fun getDeviceLocation() {
         try {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-            fusedLocationClient.lastLocation
-                .addOnSuccessListener { location ->
-                    userLocation = if (location != null) {
-                        LatLng(location.latitude, location.longitude)
-                    } else {
-                        defaultLocation
-                    }
-                    isLoading = false
-                }
-                .addOnFailureListener {
-                    userLocation = defaultLocation
-                    isLoading = false
-                }
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                userLocation = if (location != null) LatLng(location.latitude, location.longitude) else defaultLocation
+                isLoading = false
+            }.addOnFailureListener {
+                userLocation = defaultLocation
+                isLoading = false
+            }
         } catch (e: SecurityException) {
             isLoading = false
         }
     }
 }
 
-// -----------------------------------------------------------------
-// COMPOSABLES
-// -----------------------------------------------------------------
-
 @Composable
 fun MapScreenRoot(
     isLoading: Boolean,
     userLocation: LatLng,
     lugares: List<Lugar>,
-    onNavigateClick: (Lugar) -> Unit
+    onNavigateClick: (Lugar) -> Unit,
+    onProfileSettingsClick: () -> Unit
 ) {
     if (isLoading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
     } else {
         ActualMapScreen(
             userLocation = userLocation,
             lugares = lugares,
-            onNavigateClick = onNavigateClick
+            onNavigateClick = onNavigateClick,
+            onProfileSettingsClick = onProfileSettingsClick
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActualMapScreen(
     userLocation: LatLng,
     lugares: List<Lugar>,
-    onNavigateClick: (Lugar) -> Unit
+    onNavigateClick: (Lugar) -> Unit,
+    onProfileSettingsClick: () -> Unit
 ) {
-    // Estado para guardar el lugar seleccionado actualmente (para el botón de navegar)
     var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
+
+    // ESTADO PARA EL FILTRO: null = Todos, 1 = Parques, 2 = Museos
+    var currentFilterId by remember { mutableStateOf<Int?>(null) }
+    var showCategoryMenu by remember { mutableStateOf(false) }
+
+    val lugaresFiltrados = if (currentFilterId == null) {
+        lugares
+    } else {
+        lugares.filter { it.idCategoria == currentFilterId }
+    }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(userLocation, 14f)
     }
 
     LaunchedEffect(userLocation) {
-        cameraPositionState.animate(
-            com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(userLocation, 14f)
-        )
+        cameraPositionState.animate(com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(userLocation, 14f))
     }
 
     Scaffold { padding ->
@@ -222,33 +205,102 @@ fun ActualMapScreen(
                 properties = MapProperties(isMyLocationEnabled = true),
                 uiSettings = MapUiSettings(myLocationButtonEnabled = true, zoomControlsEnabled = false)
             ) {
-                // Marcador de TU ubicación (opcional, ya sale el punto azul con isMyLocationEnabled)
-
-                // PINTAR TODOS LOS LUGARES DE LA BD
-                lugares.forEach { lugar ->
+                lugaresFiltrados.forEach { lugar ->
                     Marker(
                         state = MarkerState(position = LatLng(lugar.latitud, lugar.longitud)),
                         title = lugar.nombre,
-                        snippet = lugar.descripcion ?: "Sin descripción",
+                        snippet = lugar.descripcion ?: "Ver detalles",
                         onClick = {
-                            selectedLugar = lugar // Guardamos cuál se tocó
-                            false // false para permitir el comportamiento default (mostrar info window)
+                            selectedLugar = lugar
+                            false
                         }
                     )
                 }
             }
 
-            // Botón flotante "Ver Detalle"
+            // --- BARRA DE HERRAMIENTAS SUPERIOR (REDISEÑADA) ---
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Botón OJO (Menú de Filtros) - AHORA A LA IZQUIERDA
+                Box {
+                    SmallFloatingActionButton(
+                        onClick = { showCategoryMenu = true },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = "Filtrar Categoría")
+                    }
+
+                    DropdownMenu(
+                        expanded = showCategoryMenu,
+                        onDismissRequest = { showCategoryMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Parques") },
+                            onClick = {
+                                currentFilterId = 1
+                                showCategoryMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Museos") },
+                            onClick = {
+                                currentFilterId = 2
+                                showCategoryMenu = false
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp)) // Espacio pequeño "pegado"
+
+                // 2. Chips Dinámicos
+                // Chip "Todos" (Siempre visible, seleccionado si id es null)
+                FilterChip(
+                    selected = currentFilterId == null,
+                    onClick = { currentFilterId = null },
+                    label = { Text("Todos") },
+                    leadingIcon = if (currentFilterId == null) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+
+                // Chip de Categoría Específica (Solo aparece si seleccionaste algo del menú)
+                if (currentFilterId != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val categoryName = if (currentFilterId == 1) "Parques" else "Museos"
+                    FilterChip(
+                        selected = true, // Siempre seleccionado porque es el filtro activo
+                        onClick = { showCategoryMenu = true }, // Al tocarlo abre el menú otra vez
+                        label = { Text(categoryName) },
+                        leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f)) // Empuja la tuerca al final
+
+                // 3. Botón TUERCA (Configuración)
+                SmallFloatingActionButton(
+                    onClick = onProfileSettingsClick,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = "Configurar Intereses") // 👈 ÍCONO TUERCA
+                }
+            }
+
+            // Botón flotante inferior "Ver Detalle"
             if (selectedLugar != null) {
                 Button(
-                    onClick = {
-                        selectedLugar?.let {
-                            onNavigateClick(it) // 👈 AHORA PASAMOS EL OBJETO
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(24.dp)
+                    onClick = { selectedLugar?.let { onNavigateClick(it) } },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp)
                 ) {
                     Text(text = "Ver: ${selectedLugar?.nombre}")
                 }
