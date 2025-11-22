@@ -49,6 +49,7 @@
         <activity android:name=".RecompensasActivity" />
         <activity android:name=".UsageDetailActivity" />
         <activity android:name=".DetalleLugarActivity" />
+        <activity android:name=".AjustesActivity" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"

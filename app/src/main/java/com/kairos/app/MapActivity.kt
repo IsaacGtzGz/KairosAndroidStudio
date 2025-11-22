@@ -91,7 +91,9 @@ class MapActivity : ComponentActivity() {
                         startActivity(intent)
                     },
                     onProfileSettingsClick = {
-                        Toast.makeText(this, "Ir a Configuración de Intereses (Próximamente)", Toast.LENGTH_SHORT).show()
+                        // Abre AjustesActivity
+                        val intent = Intent(this, AjustesActivity::class.java)
+                        startActivity(intent)
                     }
                 )
             }

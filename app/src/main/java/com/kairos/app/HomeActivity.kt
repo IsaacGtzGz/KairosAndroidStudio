@@ -49,6 +49,9 @@ import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
 import com.google.accompanist.pager.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -906,26 +909,33 @@ fun MellowPlantCard(index: Int) {
 // -----------------------------
 @Composable
 fun HomeBottomBar() {
-    // (Sin cambios)
+    // 1. Obtenemos el contexto actual para poder lanzar Activities
+    val context = LocalContext.current
+
     NavigationBar {
         NavigationBarItem(
             selected = true,
-            onClick = { /* TODO */ },
-            icon = { Icon(Icons.Default.ExitToApp, contentDescription = null) },
+            onClick = { /* Ya estás en Inicio */ },
+            icon = { Icon(Icons.Default.Home, contentDescription = null) }, // Cambié a Home
             label = { Text("Inicio") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* TODO */ },
-            // ** INICIO DE LA CORRECCIÓN DE TYPO **
-            icon = { Icon(Icons.Default.ExitToApp, contentDescription = null) }, // Era ExitTooApp
-            // ** FIN DE LA CORRECCIÓN DE TYPO **
+            onClick = {
+                // Aquí podrías poner un Toast de "Próximamente" o navegar al Perfil si lo tuviéramos
+                Toast.makeText(context, "Perfil en construcción", Toast.LENGTH_SHORT).show()
+            },
+            icon = { Icon(Icons.Default.Person, contentDescription = null) }, // Cambié a Person
             label = { Text("Perfil") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* TODO */ },
-            icon = { Icon(Icons.Default.ExitToApp, contentDescription = null) },
+            onClick = {
+                // 2. Aquí conectamos la AjustesActivity
+                val intent = Intent(context, AjustesActivity::class.java)
+                context.startActivity(intent)
+            },
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) }, // Cambié a Settings (Tuerca)
             label = { Text("Ajustes") }
         )
     }
