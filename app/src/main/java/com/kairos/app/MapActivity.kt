@@ -10,8 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,15 +17,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Settings // 👈 Ícono de Tuerca
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
@@ -42,6 +38,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.kairos.app.models.Lugar
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
+import com.kairos.app.utils.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,6 +50,9 @@ class MapActivity : ComponentActivity() {
     private var isLoading by mutableStateOf(true)
     private var lugaresList by mutableStateOf<List<Lugar>>(emptyList())
     private val defaultLocation = LatLng(21.1290, -101.6700)
+
+    // Variable para acceder a las preferencias
+    private lateinit var sessionManager: SessionManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(
@@ -70,14 +70,20 @@ class MapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        sessionManager = SessionManager(this) // Inicializamos
+
         fetchLugaresFromApi()
 
         setContent {
             KairosTheme {
+                // Leemos las preferencias guardadas
+                val savedInterests = sessionManager.fetchInterests()
+
                 MapScreenRoot(
                     isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
                     lugares = lugaresList,
+                    savedInterests = savedInterests, // Pasamos los intereses
                     onNavigateClick = { lugar ->
                         val intent = Intent(this, DetalleLugarActivity::class.java).apply {
                             putExtra("nombre", lugar.nombre)
@@ -91,7 +97,7 @@ class MapActivity : ComponentActivity() {
                         startActivity(intent)
                     },
                     onProfileSettingsClick = {
-                        // Abre AjustesActivity
+                        // Al dar clic en la tuerca, abrimos Ajustes
                         val intent = Intent(this, AjustesActivity::class.java)
                         startActivity(intent)
                     }
@@ -101,6 +107,9 @@ class MapActivity : ComponentActivity() {
 
         checkLocationPermission()
     }
+
+    // (El resto de funciones fetchLugaresFromApi, checkLocationPermission, getDeviceLocation quedan IGUAL)
+    // ... COPIA TUS FUNCIONES PRIVADAS AQUÍ SI ES NECESARIO O DÉJALAS COMO ESTABAN ...
 
     private fun fetchLugaresFromApi() {
         CoroutineScope(Dispatchers.IO).launch {
@@ -112,9 +121,7 @@ class MapActivity : ComponentActivity() {
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    e.printStackTrace()
-                }
+                withContext(Dispatchers.Main) { e.printStackTrace() }
             }
         }
     }
@@ -154,6 +161,7 @@ fun MapScreenRoot(
     isLoading: Boolean,
     userLocation: LatLng,
     lugares: List<Lugar>,
+    savedInterests: Set<String>,
     onNavigateClick: (Lugar) -> Unit,
     onProfileSettingsClick: () -> Unit
 ) {
@@ -165,6 +173,7 @@ fun MapScreenRoot(
         ActualMapScreen(
             userLocation = userLocation,
             lugares = lugares,
+            savedInterests = savedInterests,
             onNavigateClick = onNavigateClick,
             onProfileSettingsClick = onProfileSettingsClick
         )
@@ -176,19 +185,34 @@ fun MapScreenRoot(
 fun ActualMapScreen(
     userLocation: LatLng,
     lugares: List<Lugar>,
+    savedInterests: Set<String>,
     onNavigateClick: (Lugar) -> Unit,
     onProfileSettingsClick: () -> Unit
 ) {
     var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
 
-    // ESTADO PARA EL FILTRO: null = Todos, 1 = Parques, 2 = Museos
-    var currentFilterId by remember { mutableStateOf<Int?>(null) }
+    // ESTADO DE FILTRO: 
+    // -1 = Mis Preferencias (Default)
+    // 0 = Todos
+    // 1 = Parques, 2 = Museos, etc.
+    var currentFilterId by remember { mutableStateOf(-1) }
     var showCategoryMenu by remember { mutableStateOf(false) }
 
-    val lugaresFiltrados = if (currentFilterId == null) {
-        lugares
-    } else {
-        lugares.filter { it.idCategoria == currentFilterId }
+    // LÓGICA DE FILTRADO REAL
+    val lugaresFiltrados = when (currentFilterId) {
+        0 -> lugares // Todos
+        -1 -> {
+            // Filtrar por Preferencias guardadas
+            // Mapeo rápido (esto debería venir de la BD idealmente, pero para MVP hardcodeamos)
+            // Parques = 1, Museos = 2
+            val idsInteres = mutableListOf<Int>()
+            if (savedInterests.contains("Parques")) idsInteres.add(1)
+            if (savedInterests.contains("Museos")) idsInteres.add(2)
+
+            if (idsInteres.isEmpty()) lugares // Si no seleccionó nada, mostramos todo
+            else lugares.filter { it.idCategoria in idsInteres }
+        }
+        else -> lugares.filter { it.idCategoria == currentFilterId }
     }
 
     val cameraPositionState = rememberCameraPositionState {
@@ -220,7 +244,7 @@ fun ActualMapScreen(
                 }
             }
 
-            // --- BARRA DE HERRAMIENTAS SUPERIOR (REDISEÑADA) ---
+            // --- BARRA DE HERRAMIENTAS SUPERIOR ---
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -228,14 +252,14 @@ fun ActualMapScreen(
                     .padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Botón OJO (Menú de Filtros) - AHORA A LA IZQUIERDA
+                // 1. Botón OJO (Menú de Filtros)
                 Box {
                     SmallFloatingActionButton(
                         onClick = { showCategoryMenu = true },
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ) {
-                        Icon(Icons.Default.Visibility, contentDescription = "Filtrar Categoría")
+                        Icon(Icons.Default.Visibility, contentDescription = "Ver...")
                     }
 
                     DropdownMenu(
@@ -243,58 +267,60 @@ fun ActualMapScreen(
                         onDismissRequest = { showCategoryMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Parques") },
-                            onClick = {
-                                currentFilterId = 1
-                                showCategoryMenu = false
-                            }
+                            text = { Text("Ver Todos") },
+                            onClick = { currentFilterId = 0; showCategoryMenu = false }
+                        )
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("Solo Parques") },
+                            onClick = { currentFilterId = 1; showCategoryMenu = false }
                         )
                         DropdownMenuItem(
-                            text = { Text("Museos") },
-                            onClick = {
-                                currentFilterId = 2
-                                showCategoryMenu = false
-                            }
+                            text = { Text("Solo Museos") },
+                            onClick = { currentFilterId = 2; showCategoryMenu = false }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp)) // Espacio pequeño "pegado"
+                Spacer(modifier = Modifier.width(8.dp))
 
-                // 2. Chips Dinámicos
-                // Chip "Todos" (Siempre visible, seleccionado si id es null)
+                // 2. Chip Principal: PREFERENCIAS (Default)
                 FilterChip(
-                    selected = currentFilterId == null,
-                    onClick = { currentFilterId = null },
-                    label = { Text("Todos") },
-                    leadingIcon = if (currentFilterId == null) {
-                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    selected = currentFilterId == -1,
+                    onClick = { currentFilterId = -1 },
+                    label = { Text("Mis Preferencias") },
+                    leadingIcon = if (currentFilterId == -1) {
+                        { Icon(Icons.Default.Favorite, contentDescription = null) }
                     } else null,
                     colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
 
-                // Chip de Categoría Específica (Solo aparece si seleccionaste algo del menú)
-                if (currentFilterId != null) {
+                // 3. Chip Auxiliar: Muestra qué estás viendo si NO son preferencias
+                if (currentFilterId != -1) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    val categoryName = if (currentFilterId == 1) "Parques" else "Museos"
+                    val label = when(currentFilterId) {
+                        0 -> "Todos"
+                        1 -> "Parques"
+                        2 -> "Museos"
+                        else -> ""
+                    }
                     FilterChip(
-                        selected = true, // Siempre seleccionado porque es el filtro activo
-                        onClick = { showCategoryMenu = true }, // Al tocarlo abre el menú otra vez
-                        label = { Text(categoryName) },
-                        leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface)
+                        selected = true,
+                        onClick = { /* No hace nada, es informativo */ },
+                        label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                     )
                 }
 
-                Spacer(modifier = Modifier.weight(1f)) // Empuja la tuerca al final
+                Spacer(modifier = Modifier.weight(1f))
 
-                // 3. Botón TUERCA (Configuración)
+                // 4. Botón TUERCA (Configuración)
                 SmallFloatingActionButton(
                     onClick = onProfileSettingsClick,
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configurar Intereses") // 👈 ÍCONO TUERCA
+                    Icon(Icons.Default.Settings, contentDescription = "Configurar")
                 }
             }
 
