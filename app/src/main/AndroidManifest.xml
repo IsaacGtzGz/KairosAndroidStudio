@@ -50,7 +50,8 @@
         <activity android:name=".UsageDetailActivity" />
         <activity android:name=".DetalleLugarActivity" />
         <activity android:name=".AjustesActivity" />
-
+        <activity android:name=".PerfilActivity" />
+        
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />

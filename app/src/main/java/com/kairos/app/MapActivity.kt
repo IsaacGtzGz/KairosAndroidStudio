@@ -8,7 +8,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+// Layouts básicos
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,16 +16,37 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+// Iconos
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+// Material 3 Componentes
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+// Runtime y UI
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+// Google Maps y Utils
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -35,6 +56,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+// Tus Clases
 import com.kairos.app.models.Lugar
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
@@ -46,12 +68,15 @@ import kotlinx.coroutines.withContext
 
 class MapActivity : ComponentActivity() {
 
+    // El estado de la ubicación Y el estado de carga
     private var userLocation by mutableStateOf<LatLng?>(null)
     private var isLoading by mutableStateOf(true)
     private var lugaresList by mutableStateOf<List<Lugar>>(emptyList())
-    private val defaultLocation = LatLng(21.1290, -101.6700)
 
-    // Variable para acceder a las preferencias
+    // Variable de estado para los intereses
+    private var savedInterests by mutableStateOf<Set<String>>(emptySet())
+
+    private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
     private lateinit var sessionManager: SessionManager
 
     private val requestPermissionLauncher =
@@ -61,7 +86,7 @@ class MapActivity : ComponentActivity() {
             if (isGranted) {
                 getDeviceLocation()
             } else {
-                Toast.makeText(this, "Ubicación denegada", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Permiso denegado, usando ubicación default", Toast.LENGTH_LONG).show()
                 userLocation = defaultLocation
                 isLoading = false
             }
@@ -69,22 +94,21 @@ class MapActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sessionManager = SessionManager(this)
 
-        sessionManager = SessionManager(this) // Inicializamos
-
+        // Carga inicial de datos
         fetchLugaresFromApi()
+        checkLocationPermission()
 
         setContent {
             KairosTheme {
-                // Leemos las preferencias guardadas
-                val savedInterests = sessionManager.fetchInterests()
-
                 MapScreenRoot(
                     isLoading = isLoading,
                     userLocation = userLocation ?: defaultLocation,
                     lugares = lugaresList,
-                    savedInterests = savedInterests, // Pasamos los intereses
+                    savedInterests = savedInterests,
                     onNavigateClick = { lugar ->
+                        // 👇 CORREGIDO: Ahora abre TU pantalla de detalles, no el GPS directo
                         val intent = Intent(this, DetalleLugarActivity::class.java).apply {
                             putExtra("nombre", lugar.nombre)
                             putExtra("descripcion", lugar.descripcion)
@@ -97,19 +121,19 @@ class MapActivity : ComponentActivity() {
                         startActivity(intent)
                     },
                     onProfileSettingsClick = {
-                        // Al dar clic en la tuerca, abrimos Ajustes
                         val intent = Intent(this, AjustesActivity::class.java)
                         startActivity(intent)
                     }
                 )
             }
         }
-
-        checkLocationPermission()
     }
 
-    // (El resto de funciones fetchLugaresFromApi, checkLocationPermission, getDeviceLocation quedan IGUAL)
-    // ... COPIA TUS FUNCIONES PRIVADAS AQUÍ SI ES NECESARIO O DÉJALAS COMO ESTABAN ...
+    override fun onResume() {
+        super.onResume()
+        // Recargamos los intereses por si cambiaron en Ajustes
+        savedInterests = sessionManager.fetchInterests()
+    }
 
     private fun fetchLugaresFromApi() {
         CoroutineScope(Dispatchers.IO).launch {
@@ -128,7 +152,10 @@ class MapActivity : ComponentActivity() {
 
     private fun checkLocationPermission() {
         when {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED -> {
                 getDeviceLocation()
             }
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
@@ -143,13 +170,19 @@ class MapActivity : ComponentActivity() {
     private fun getDeviceLocation() {
         try {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                userLocation = if (location != null) LatLng(location.latitude, location.longitude) else defaultLocation
-                isLoading = false
-            }.addOnFailureListener {
-                userLocation = defaultLocation
-                isLoading = false
-            }
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location ->
+                    userLocation = if (location != null) {
+                        LatLng(location.latitude, location.longitude)
+                    } else {
+                        defaultLocation
+                    }
+                    isLoading = false
+                }
+                .addOnFailureListener {
+                    userLocation = defaultLocation
+                    isLoading = false
+                }
         } catch (e: SecurityException) {
             isLoading = false
         }
@@ -191,10 +224,7 @@ fun ActualMapScreen(
 ) {
     var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
 
-    // ESTADO DE FILTRO: 
-    // -1 = Mis Preferencias (Default)
-    // 0 = Todos
-    // 1 = Parques, 2 = Museos, etc.
+    // ESTADO DE FILTRO: -1 = Mis Preferencias (Default), 0 = Todos
     var currentFilterId by remember { mutableStateOf(-1) }
     var showCategoryMenu by remember { mutableStateOf(false) }
 
@@ -203,13 +233,17 @@ fun ActualMapScreen(
         0 -> lugares // Todos
         -1 -> {
             // Filtrar por Preferencias guardadas
-            // Mapeo rápido (esto debería venir de la BD idealmente, pero para MVP hardcodeamos)
-            // Parques = 1, Museos = 2
             val idsInteres = mutableListOf<Int>()
+
             if (savedInterests.contains("Parques")) idsInteres.add(1)
             if (savedInterests.contains("Museos")) idsInteres.add(2)
+            if (savedInterests.contains("Cafeterías")) idsInteres.add(3)
+            if (savedInterests.contains("Senderismo")) idsInteres.add(4)
+            if (savedInterests.contains("Arte")) idsInteres.add(5)
+            if (savedInterests.contains("Comida")) idsInteres.add(6)
 
-            if (idsInteres.isEmpty()) lugares // Si no seleccionó nada, mostramos todo
+            // Si está vacío, devuelve lista vacía (como pediste)
+            if (idsInteres.isEmpty()) emptyList()
             else lugares.filter { it.idCategoria in idsInteres }
         }
         else -> lugares.filter { it.idCategoria == currentFilterId }
@@ -229,7 +263,7 @@ fun ActualMapScreen(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
                 properties = MapProperties(isMyLocationEnabled = true),
-                uiSettings = MapUiSettings(myLocationButtonEnabled = true, zoomControlsEnabled = false)
+                uiSettings = MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false)
             ) {
                 lugaresFiltrados.forEach { lugar ->
                     Marker(
@@ -279,6 +313,7 @@ fun ActualMapScreen(
                             text = { Text("Solo Museos") },
                             onClick = { currentFilterId = 2; showCategoryMenu = false }
                         )
+                        // Agrega aquí más opciones si quieres ver "Solo Cafeterías", etc.
                     }
                 }
 
@@ -295,14 +330,14 @@ fun ActualMapScreen(
                     colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
 
-                // 3. Chip Auxiliar: Muestra qué estás viendo si NO son preferencias
+                // 3. Chip Auxiliar (Muestra qué estás viendo si NO son preferencias)
                 if (currentFilterId != -1) {
                     Spacer(modifier = Modifier.width(8.dp))
                     val label = when(currentFilterId) {
                         0 -> "Todos"
                         1 -> "Parques"
                         2 -> "Museos"
-                        else -> ""
+                        else -> "Categoría $currentFilterId"
                     }
                     FilterChip(
                         selected = true,

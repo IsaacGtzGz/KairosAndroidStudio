@@ -1,17 +1,19 @@
 package com.kairos.app
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,71 +21,87 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.kairos.app.models.Promocion
+import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
-import androidx.compose.foundation.background
 
 class RecompensasActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             KairosTheme {
+                var promociones by remember { mutableStateOf<List<Promocion>>(emptyList()) }
+                var isLoading by remember { mutableStateOf(true) }
+
+                LaunchedEffect(Unit) {
+                    try {
+                        val response = RetrofitClient.instance.getPromociones()
+                        if (response.isSuccessful && response.body() != null) {
+                            // 👇 FILTRADO MÁGICO:
+                            // Filtramos para obtener solo las que tengan título (eliminamos las referencias $ref)
+                            promociones = response.body()!!.values.filter { !it.titulo.isNullOrEmpty() }
+                        } else {
+                            Toast.makeText(this@RecompensasActivity, "Error al cargar", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace() // Imprime el error en consola por si acaso
+                        Toast.makeText(this@RecompensasActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isLoading = false
+                    }
+                }
+
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("Recompensas") },
+                            title = { Text("Recompensas Disponibles") },
                             navigationIcon = {
-                                IconButton(onClick = {
-                                    // Esta acción simula el botón "atrás"
-                                    finish()
-                                }) {
+                                IconButton(onClick = { finish() }) {
                                     Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
                                 }
                             }
                         )
                     }
                 ) { paddingValues ->
-                    // Usamos LazyColumn para que sea "scrolleable"
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        item {
-                            Text(
-                                "Recompensas Disponibles",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                        } else {
+                            if (promociones.isEmpty()) {
+                                Text("No hay recompensas activas.", modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    items(promociones) { promo ->
+                                        val titulo = promo.titulo ?: "Sin título"
 
-                        // Tarjeta de Recompensa Simulada 1
-                        item {
-                            RecompensaCard(
-                                titulo = "Café Gratis en 'El Gato'",
-                                descripcion = "Válido al visitar 5 lugares este mes.",
-                                imageUrl = "https://images.unsplash.com/photo-1511920183303-6235b5ef46c0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wzNTU2MTR8MHwxfGFsbHx8fHx8fHx8fDE3MzE0NTMxMDZ8&ixlib=rb-4.0.3&q=80&w=400"
-                            )
-                        }
+                                        // 👇 LÓGICA MÁGICA DE IMÁGENES
+                                        // Asignamos una imagen diferente dependiendo de qué diga el título
+                                        val imagenDinamica = when {
+                                            titulo.contains("Parque", ignoreCase = true) || titulo.contains("Entrada", ignoreCase = true) ->
+                                                "https://cdn-icons-png.flaticon.com/512/433/433102.png" // Icono de Parque/Naturaleza
 
-                        // Tarjeta de Recompensa Simulada 2
-                        item {
-                            RecompensaCard(
-                                titulo = "2x1 en Senderismo",
-                                descripcion = "Recompensa por 10,000 pasos.",
-                                imageUrl = "https://images.unsplash.com/photo-1458040491910-3309e3e3b733?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wzNTU2MTR8MHwxfGFsbHx8fHx8fHx8fDE3MzE0NTMxMzV8&ixlib=rb-4.0.3&q=80&w=400"
-                            )
-                        }
+                                            titulo.contains("Refresco", ignoreCase = true) || titulo.contains("Cine", ignoreCase = true) ->
+                                                "https://cdn-icons-png.flaticon.com/512/3076/3076134.png" // Icono de Refresco/Comida
 
-                        // Tarjeta de Recompensa Simulada 3
-                        item {
-                            RecompensaCard(
-                                titulo = "Postre de cortesía",
-                                descripcion = "Al explorar la 'Ruta de Murales'.",
-                                imageUrl = "https://images.unsplash.com/photo-1587314168485-3236d6710814?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wzNTU2MTR8MHwxfGFsbHx8fHx8fHx8fDE3MzE0NTMyMjR8&ixlib=rb-4.0.3&q=80&w=400"
-                            )
+                                            titulo.contains("Descuento", ignoreCase = true) || titulo.contains("Starbucks", ignoreCase = true) || titulo.contains("Café", ignoreCase = true) ->
+                                                "https://cdn-icons-png.flaticon.com/512/590/590836.png" // Icono de Café
+
+                                            else -> "https://cdn-icons-png.flaticon.com/512/2534/2534196.png" // Tu imagen default
+                                        }
+
+                                        RecompensaCard(
+                                            titulo = titulo,
+                                            descripcion = promo.descripcion ?: "Sin descripción",
+                                            imageUrl = imagenDinamica // 👈 Usamos la variable dinámica aquí
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -92,7 +110,6 @@ class RecompensasActivity : ComponentActivity() {
     }
 }
 
-// Composable reutilizable para las tarjetas de recompensa
 @Composable
 fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String) {
     Card(
@@ -101,18 +118,15 @@ fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String) {
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Usamos AsyncImage de Coil (que ya instalamos)
             AsyncImage(
                 model = imageUrl,
                 contentDescription = titulo,
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(60.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
@@ -120,15 +134,8 @@ fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String) {
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = titulo,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = descripcion,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text(text = titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(text = descripcion, style = MaterialTheme.typography.bodyMedium)
             }
 
             Icon(
