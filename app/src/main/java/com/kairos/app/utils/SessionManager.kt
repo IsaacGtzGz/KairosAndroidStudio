@@ -8,6 +8,18 @@ class SessionManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("kairos_prefs", Context.MODE_PRIVATE)
 
+    // --- DATOS DE USUARIO (NUEVO) ---
+    fun saveUserId(id: Int) {
+        prefs.edit().putInt("user_id", id).apply()
+    }
+
+    fun fetchUserId(): Int {
+        // Retorna 1 por defecto si no hay nada guardado (para tus pruebas actuales)
+        // Cuando arregles el Login, esto leerá el ID real.
+        return prefs.getInt("user_id", 1)
+    }
+
+    // --- AUTENTICACIÓN ---
     fun saveAuthToken(token: String) {
         prefs.edit().putString("auth_token", token).apply()
     }
@@ -34,7 +46,7 @@ class SessionManager(context: Context) {
     }
 
     fun fetchStepsBaseline(): Int {
-        return prefs.getInt("steps_baseline", -1) // -1 significa que no hay dato guardado
+        return prefs.getInt("steps_baseline", -1)
     }
 
     fun saveStepsDate(date: String) {
@@ -46,8 +58,6 @@ class SessionManager(context: Context) {
     }
 
     // --- AJUSTES DE BIENESTAR ---
-
-    // Guardar/Leer Días Activos (Ej: "Lun,Mar,Sab")
     fun saveActiveDays(days: Set<String>) {
         prefs.edit().putStringSet("active_days", days).apply()
     }
@@ -56,15 +66,14 @@ class SessionManager(context: Context) {
         return prefs.getStringSet("active_days", emptySet()) ?: emptySet()
     }
 
-    // Guardar/Leer Intensidad (0=Bajo, 1=Medio, 2=Alto)
     fun saveIntensity(level: Int) {
         prefs.edit().putInt("notification_intensity", level).apply()
     }
 
     fun fetchIntensity(): Int {
-        return prefs.getInt("notification_intensity", 1) // 1 (Medio) por defecto
+        return prefs.getInt("notification_intensity", 1)
     }
-    // --- INTERESES DEL USUARIO ---
+
     fun saveInterests(interests: Set<String>) {
         prefs.edit().putStringSet("user_interests", interests).apply()
     }

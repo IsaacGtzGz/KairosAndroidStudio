@@ -22,8 +22,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -38,10 +36,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,8 +44,13 @@ import androidx.core.content.ContextCompat
 import com.google.accompanist.pager.*
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.kairos.app.models.ActividadFisicaRequest
+import com.kairos.app.models.UsoDigitalRequest
+import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -139,6 +138,11 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         setContent {
             KairosTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    // Calculamos el insight en tiempo real
+                    val currentSteps = stepsCount.value.toIntOrNull() ?: 0
+                    val currentUsage = socialMediaUsageTime.value
+                    val aiMessage = generateAiInsight(currentSteps, currentUsage)
+
                     HomeScreen(
                         onLogout = {
                             sessionManager.clearSession()
@@ -149,7 +153,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         onSosClick = { showSosDialog.value = true },
                         emergencyContact = emergencyContactNumber.value,
                         onSelectContact = { handleSelectContactClick() },
-                        userName = "Aventurero", // Idealmente traer del SessionManager si guardaste el nombre
+                        userName = "Aventurero",
                         showSosDialog = showSosDialog.value,
                         onDismissSosDialog = { showSosDialog.value = false },
                         onConfirmSos = {
@@ -166,7 +170,8 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                             else requestUsageStatsPermission()
                         },
                         usageTime = socialMediaUsageTime.value,
-                        onConfigClick = { startActivity(Intent(this, AjustesActivity::class.java)) } // Nueva conexión a Ajustes
+                        onConfigClick = { startActivity(Intent(this, AjustesActivity::class.java)) },
+                        insightMessage = aiMessage // 👇 AHORA SÍ FUNCIONARÁ
                     )
                 }
             }
@@ -180,6 +185,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         if (permissionGranted.value) setupStepCounter()
         checkUsageStatsPermission()
         getSocialMediaUsage()
+        sincronizarDatosConBackend()
     }
 
     override fun onPause() {
@@ -187,7 +193,46 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         sensorManager?.unregisterListener(this)
     }
 
-    // --- LÓGICA SENSORES Y PERMISOS (Resumida para no repetir, es la misma que tenías) ---
+    // --- LÓGICA NUEVA: SINCRONIZACIÓN CON BACKEND ---
+    private fun sincronizarDatosConBackend() {
+        val pasosHoy = stepsCount.value.toIntOrNull() ?: 0
+        val tiempoTexto = socialMediaUsageTime.value
+        var minutosTotales = 0
+        try {
+            if (tiempoTexto.contains("h")) {
+                val partes = tiempoTexto.split("h")
+                val horas = partes[0].trim().toInt()
+                val minutos = partes[1].replace("m", "").trim().toInt()
+                minutosTotales = (horas * 60) + minutos
+            } else {
+                minutosTotales = tiempoTexto.replace("min", "").replace(" ", "").toIntOrNull() ?: 0
+            }
+        } catch (e: Exception) {
+            minutosTotales = 0
+        }
+
+        val userId = sessionManager.fetchUserId()
+        val fechaHoy = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (pasosHoy > 0) {
+                    RetrofitClient.instance.enviarPasos(
+                        ActividadFisicaRequest(userId, pasosHoy, fechaHoy)
+                    )
+                }
+                if (minutosTotales > 0) {
+                    RetrofitClient.instance.enviarUsoDigital(
+                        UsoDigitalRequest(userId, minutosTotales, fechaHoy)
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // --- LÓGICA SENSORES Y PERMISOS ---
     private fun checkAndRequestActivityPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             when {
@@ -253,6 +298,27 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
+    // --- LÓGICA DE INSIGHTS (SIMULACIÓN IA) ---
+    private fun generateAiInsight(steps: Int, usageTimeStr: String): String {
+        var minutosUso = 0
+        try {
+            if (usageTimeStr.contains("h")) {
+                val partes = usageTimeStr.split("h")
+                minutosUso = (partes[0].trim().toInt() * 60) + partes[1].replace("m", "").trim().toInt()
+            } else {
+                minutosUso = usageTimeStr.replace("min", "").replace(" ", "").toIntOrNull() ?: 0
+            }
+        } catch (e: Exception) { minutosUso = 0 }
+
+        return when {
+            minutosUso > 120 -> "⚠️ Has pasado más de 2 horas en redes. Tu mente necesita un respiro. ¿Qué tal una caminata corta sin el celular?"
+            steps > 8000 -> "🏆 ¡Increíble! Hoy estás on fire. Tu nivel de actividad está por encima del promedio. ¡Sigue así!"
+            steps > 4000 -> "🌿 Vas bien. Estás a mitad de camino de tu meta diaria. Una vuelta a la manzana podría completarla."
+            steps < 1000 && minutosUso > 60 -> "💡 Detectamos mucha actividad digital y poca física. El equilibrio es clave. ¡Intenta dar 500 pasos ahora!"
+            else -> "🌞 Recuerda: 10 minutos de sol y movimiento mejoran tu estado de ánimo un 40%."
+        }
+    }
+
     private fun getSocialMediaUsage() {
         if (!hasUsagePermission.value) return
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
@@ -276,7 +342,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         socialMediaUsageTime.value = if (hours > 0) "${hours}h ${minutes}m" else "${minutes} min"
     }
 
-    // --- LÓGICA SOS (Resumida) ---
+    // --- LÓGICA SOS ---
     private fun launch911Dialer() {
         try {
             startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:911") })
@@ -355,7 +421,8 @@ fun HomeScreen(
     hasUsagePermission: Boolean,
     onUsagePermissionClick: () -> Unit,
     usageTime: String,
-    onConfigClick: () -> Unit
+    onConfigClick: () -> Unit,
+    insightMessage: String // 👈 PARÁMETRO AGREGADO AQUÍ
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -447,7 +514,6 @@ fun HomeScreen(
                 }
             },
             content = { innerPadding ->
-                // DIÁLOGO SOS
                 if (showSosDialog) {
                     AlertDialog(
                         onDismissRequest = { onDismissSosDialog() },
@@ -464,7 +530,6 @@ fun HomeScreen(
                     )
                 }
 
-                // CONTENIDO PRINCIPAL (LIMPIO)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -474,25 +539,26 @@ fun HomeScreen(
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
                     AnimatedGreeting(userName = userName)
+
+                    // 👇 AQUÍ VA LA NUEVA TARJETA
+                    Spacer(modifier = Modifier.height(16.dp))
+                    InsightCard(insight = insightMessage)
+
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Sección de Descubrimiento
                     Text("Explora tu ciudad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     DiscoverCarousel()
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Sección de Bienestar (Tarjetas Agrupadas)
                     Text("Tu Bienestar Hoy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Tarjeta Pasos (Mitad izquierda)
                         Box(modifier = Modifier.weight(1f)) {
                             StepCounterCardMini(steps, hasActivityPermission, onStepsPermissionClick)
                         }
-                        // Tarjeta Uso (Mitad derecha)
                         Box(modifier = Modifier.weight(1f)) {
                             UsageMonitorCardMini(hasUsagePermission, usageTime, onUsagePermissionClick)
                         }
@@ -500,7 +566,6 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Acciones Rápidas (Recompensas y Contacto)
                     Text("Accesos Rápidos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -518,14 +583,67 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
                     NatureStrip()
-                    Spacer(modifier = Modifier.height(80.dp)) // Espacio final para el FAB
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         )
     }
 }
 
-// --- COMPOSABLES MINIMALISTAS PARA EL GRID DE BIENESTAR ---
+// -----------------------------
+// NUEVO COMPOSABLE: Tarjeta de Insights (Coach IA)
+// -----------------------------
+@Composable
+fun InsightCard(insight: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp), // Bordes más curvos, más moderno
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) // Un poco transparente para blending
+        ),
+        elevation = CardDefaults.cardElevation(0.dp) // Flat design
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            // Icono Vectorial
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SmartToy, // Icono de Robot/IA nativo
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column {
+                Text(
+                    "KAIROS COACH",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = insight,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+// --- COMPOSABLES MINIMALISTAS ---
 
 @Composable
 fun StepCounterCardMini(steps: String, hasPermission: Boolean, onClick: () -> Unit) {
@@ -569,24 +687,89 @@ fun UsageMonitorCardMini(hasPermission: Boolean, time: String, onClick: () -> Un
     }
 }
 
-// (Los demás Composables auxiliares como AnimatedGreeting, DiscoverCarousel, EmergencyContactCard,
-// DiscoveryCard, NatureStrip, MellowPlantCard los puedes dejar igual o copiar del archivo anterior,
-// son puramente visuales y no cambiaron lógica).
 @OptIn(ExperimentalPagerApi::class)
 @Composable
 fun DiscoverCarousel() {
-    val items = listOf(Triple("Explora", "Parques y Rutas", "🌲"), Triple("Cultura", "Museos y Arte", "🎨"), Triple("Local", "Mercados", "🧺"))
+    // Usamos Iconos vectoriales en lugar de Strings de emojis
+    val items = listOf(
+        Triple("Naturaleza", "Parques y Rutas", Icons.Default.Terrain),
+        Triple("Cultura", "Museos y Arte", Icons.Default.AccountBalance), // AccountBalance parece museo
+        Triple("Local", "Mercados y Plazas", Icons.Default.Storefront)
+    )
+
     val pagerState = rememberPagerState(initialPage = 0)
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalPager(state = pagerState, count = items.size, modifier = Modifier.height(140.dp).fillMaxWidth()) { page ->
-            val (title, desc, emoji) = items[page]
-            Card(modifier = Modifier.padding(horizontal = 4.dp).fillMaxSize(), shape = RoundedCornerShape(16.dp)) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(title, fontWeight = FontWeight.Bold)
-                        Text(desc, style = MaterialTheme.typography.bodySmall)
+        // Aumentamos la altura para que quepa "más info" y se vea imponente
+        HorizontalPager(
+            state = pagerState,
+            count = items.size,
+            modifier = Modifier.height(180.dp).fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 4.dp) // Espacio a los lados
+        ) { page ->
+            val (title, desc, icon) = items[page]
+
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp) // Separación entre tarjetas
+                    .fillMaxSize(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Icono gigante de fondo (marca de agua decorativa)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                        modifier = Modifier
+                            .size(140.dp)
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 30.dp, y = 30.dp) // Desplazado a la esquina
+                    )
+
+                    // Contenido
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .align(Alignment.TopStart)
+                    ) {
+                        // Icono pequeño principal
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Botoncito falso de "Ver más"
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Explorar",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
-                    Text(emoji, fontSize = 32.sp)
                 }
             }
         }
@@ -615,7 +798,6 @@ fun EmergencyContactCard(contactNumber: String?, onClick: () -> Unit) {
 
 @Composable
 fun NatureStrip() {
-    // Placeholder visual simple
     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(5) { Card(modifier = Modifier.size(60.dp, 80.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🌳") } } }
     }
