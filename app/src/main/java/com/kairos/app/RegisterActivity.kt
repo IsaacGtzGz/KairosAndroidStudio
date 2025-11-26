@@ -142,7 +142,16 @@ class RegisterActivity : ComponentActivity() {
                                         if (response.isSuccessful) {
                                             val data = response.body()
                                             if (data?.success == true && !data.token.isNullOrEmpty()) {
-                                                SessionManager(this@RegisterActivity).saveAuthToken(data.token)
+                                                val sessionManager = SessionManager(this@RegisterActivity)
+                                                sessionManager.saveAuthToken(data.token)
+                                                
+                                                // ✅ CRÍTICO: Guardar los datos del usuario registrado
+                                                data.user?.let { user ->
+                                                    sessionManager.saveUserId(user.id ?: 0)
+                                                    sessionManager.saveUserName(user.nombre)
+                                                    sessionManager.saveUserEmail(user.correo)
+                                                }
+                                                
                                                 Toast.makeText(this@RegisterActivity, "Cuenta creada con éxito", Toast.LENGTH_LONG).show()
 
                                                 val intent = Intent(this@RegisterActivity, HomeActivity::class.java).apply {

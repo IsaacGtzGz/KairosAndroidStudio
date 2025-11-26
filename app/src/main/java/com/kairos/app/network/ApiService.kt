@@ -2,6 +2,7 @@ package com.kairos.app.network
 
 import com.kairos.app.models.ActividadFisicaRequest
 import com.kairos.app.models.AuthResponse
+import com.kairos.app.models.InsightResponse
 import com.kairos.app.models.LugarResponse
 import com.kairos.app.models.PerfilUpdateRequest
 import com.kairos.app.models.PromocionResponse
@@ -40,4 +41,8 @@ interface ApiService {
         @retrofit2.http.Path("id") id: Int,
         @retrofit2.http.Body request: PerfilUpdateRequest
     ): Response<Void> // O Response<User> si tu API devuelve el usuario actualizado
+
+    // Obtener insight de IA personalizado
+    @GET("Insights/{userId}")
+    suspend fun getInsight(@retrofit2.http.Path("userId") userId: Int): Response<InsightResponse>
 }

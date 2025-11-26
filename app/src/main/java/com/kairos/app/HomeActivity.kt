@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.withContext
 import com.google.accompanist.pager.*
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -56,6 +57,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import androidx.work.*
+import com.kairos.app.notifications.DailyInsightWorker
+import java.util.Calendar
 
 class HomeActivity : ComponentActivity(), SensorEventListener {
 
@@ -135,13 +139,16 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             return
         }
 
-        setContent {
+                setContent {
             KairosTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // Calculamos el insight en tiempo real
-                    val currentSteps = stepsCount.value.toIntOrNull() ?: 0
-                    val currentUsage = socialMediaUsageTime.value
-                    val aiMessage = generateAiInsight(currentSteps, currentUsage)
+                    // Estado del insight (se carga del servidor)
+                    var aiMessage by remember { mutableStateOf("🌅 Cargando tu análisis personalizado...") }
+                    
+                    // Efecto para cargar el insight
+                    LaunchedEffect(Unit) {
+                        cargarInsightDelServidor { mensaje -> aiMessage = mensaje }
+                    }
 
                     HomeScreen(
                         onLogout = {
@@ -178,6 +185,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         }
         checkAndRequestActivityPermission()
         checkUsageStatsPermission()
+        programarNotificacionDiaria()
     }
 
     override fun onResume() {
@@ -298,24 +306,32 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
-    // --- LÓGICA DE INSIGHTS (SIMULACIÓN IA) ---
-    private fun generateAiInsight(steps: Int, usageTimeStr: String): String {
-        var minutosUso = 0
-        try {
-            if (usageTimeStr.contains("h")) {
-                val partes = usageTimeStr.split("h")
-                minutosUso = (partes[0].trim().toInt() * 60) + partes[1].replace("m", "").trim().toInt()
-            } else {
-                minutosUso = usageTimeStr.replace("min", "").replace(" ", "").toIntOrNull() ?: 0
+    // --- LÓGICA DE INSIGHTS (DESDE EL SERVIDOR - IA REAL) ---
+    private fun cargarInsightDelServidor(onResult: (String) -> Unit) {
+        val userId = sessionManager.fetchUserId()
+        
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = RetrofitClient.instance.getInsight(userId)
+                if (response.isSuccessful) {
+                    val insight = response.body()
+                    val mensaje = insight?.mensaje ?: "💙 Sigue explorando y cuidando tu bienestar."
+                    // Actualizamos en el hilo principal
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        onResult(mensaje)
+                    }
+                } else {
+                    // Fallback si el servidor falla
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        onResult("🌞 Recuerda: cada paso cuenta, cada minuto lejos de la pantalla es vida ganada.")
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback si hay error de conexión
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onResult("💡 No se pudo conectar al servidor. Sigue explorando.")
+                }
             }
-        } catch (e: Exception) { minutosUso = 0 }
-
-        return when {
-            minutosUso > 120 -> "⚠️ Has pasado más de 2 horas en redes. Tu mente necesita un respiro. ¿Qué tal una caminata corta sin el celular?"
-            steps > 8000 -> "🏆 ¡Increíble! Hoy estás on fire. Tu nivel de actividad está por encima del promedio. ¡Sigue así!"
-            steps > 4000 -> "🌿 Vas bien. Estás a mitad de camino de tu meta diaria. Una vuelta a la manzana podría completarla."
-            steps < 1000 && minutosUso > 60 -> "💡 Detectamos mucha actividad digital y poca física. El equilibrio es clave. ¡Intenta dar 500 pasos ahora!"
-            else -> "🌞 Recuerda: 10 minutos de sol y movimiento mejoran tu estado de ánimo un 40%."
         }
     }
 
@@ -395,6 +411,42 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
     private fun handleSelectContactClick() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) launchContactPicker()
         else requestContactPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+    }
+
+    // --- NOTIFICACIONES PROGRAMADAS ---
+    private fun programarNotificacionDiaria() {
+        // Calcular el delay inicial (próximas 8:00 PM)
+        val ahora = Calendar.getInstance()
+        val proximaEjecucion = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 20) // 8 PM
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            // Si ya pasaron las 8 PM hoy, programar para mañana
+            if (before(ahora)) {
+                add(Calendar.DAY_OF_MONTH, 1)
+            }
+        }
+
+        val delayInicial = proximaEjecucion.timeInMillis - ahora.timeInMillis
+
+        // Crear la solicitud periódica (cada 24 horas)
+        val workRequest = PeriodicWorkRequestBuilder<DailyInsightWorker>(
+            24, TimeUnit.HOURS // Se repite cada 24 horas
+        )
+            .setInitialDelay(delayInicial, TimeUnit.MILLISECONDS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED) // Solo con internet
+                    .build()
+            )
+            .build()
+
+        // Programar el trabajo (reemplaza cualquier trabajo previo con el mismo nombre)
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_insight_notification",
+            ExistingPeriodicWorkPolicy.KEEP, // No duplicar si ya existe
+            workRequest
+        )
     }
 }
 

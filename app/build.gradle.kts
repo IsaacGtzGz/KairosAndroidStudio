@@ -96,4 +96,7 @@ dependencies {
 
     // Para tener la biblioteca completa de iconos (incluyendo Visibility)
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // WorkManager para notificaciones programadas
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
