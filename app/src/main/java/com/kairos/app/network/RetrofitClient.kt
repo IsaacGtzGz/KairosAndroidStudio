@@ -6,7 +6,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    // 🔄 CAMBIAR ESTA URL CUANDO SE SUBA A AZURE
+    // CAMBIAR ESTA URL CUANDO SE SUBA A AZURE
     // Cuando tengan la URL de producción, reemplazar la línea activa por la URL de Azure
     
     private const val BASE_URL = "http://192.168.1.66:5219/api/" // RED CASA (DESARROLLO)

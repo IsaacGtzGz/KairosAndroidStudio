@@ -39,7 +39,7 @@ class RecompensasActivity : ComponentActivity() {
                     try {
                         val response = RetrofitClient.instance.getPromociones()
                         if (response.isSuccessful && response.body() != null) {
-                            // 👇 FILTRADO MÁGICO:
+                            // FILTRADO MÁGICO:
                             // Filtramos para obtener solo las que tengan título (eliminamos las referencias $ref)
                             promociones = response.body()!!.values.filter { !it.titulo.isNullOrEmpty() }
                         } else {
@@ -79,7 +79,7 @@ class RecompensasActivity : ComponentActivity() {
                                     items(promociones) { promo ->
                                         val titulo = promo.titulo ?: "Sin título"
 
-                                        // 👇 LÓGICA MÁGICA DE IMÁGENES
+                                        // LÓGICA MÁGICA DE IMÁGENES
                                         // Asignamos una imagen diferente dependiendo de qué diga el título
                                         val imagenDinamica = when {
                                             titulo.contains("Parque", ignoreCase = true) || titulo.contains("Entrada", ignoreCase = true) ->
@@ -97,7 +97,7 @@ class RecompensasActivity : ComponentActivity() {
                                         RecompensaCard(
                                             titulo = titulo,
                                             descripcion = promo.descripcion ?: "Sin descripción",
-                                            imageUrl = imagenDinamica // 👈 Usamos la variable dinámica aquí
+                                            imageUrl = imagenDinamica // Usamos la variable dinámica aquí
                                         )
                                     }
                                 }

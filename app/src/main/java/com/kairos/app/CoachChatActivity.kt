@@ -51,7 +51,7 @@ class CoachChatActivity : ComponentActivity() {
                     
                     messages = listOf(
                         ChatMessage(
-                            text = "¡Hola, $userName! 👋 Soy tu Coach Kairos. 🤖\n\nEstoy aquí para ayudarte con:\n\n🎯 Motivación personalizada según tus datos\n🗺️ Recomendaciones de lugares por tus intereses\n📊 Análisis de tu progreso (pasos y tiempo digital)\n💡 Consejos para mejorar tu bienestar\n\nEscribe cualquier cosa y te responderé con información basada en tus actividades reales. ¿Listo para empezar?",
+                            text = "¡Hola, $userName! Soy tu Coach Kairos.\n\nEstoy aquí para ayudarte con:\n\n• Motivación personalizada según tus datos\n• Recomendaciones de lugares por tus intereses\n• Análisis de tu progreso (pasos y tiempo digital)\n• Consejos para mejorar tu bienestar\n\nEscribe cualquier cosa y te responderé con información basada en tus actividades reales. ¿Listo para empezar?",
                             isFromUser = false
                         )
                     )

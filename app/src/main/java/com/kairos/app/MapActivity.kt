@@ -108,7 +108,7 @@ class MapActivity : ComponentActivity() {
                     lugares = lugaresList,
                     savedInterests = savedInterests,
                     onNavigateClick = { lugar ->
-                        // 👇 CORREGIDO: Ahora abre TU pantalla de detalles, no el GPS directo
+                        // CORREGIDO: Ahora abre TU pantalla de detalles, no el GPS directo
                         val intent = Intent(this, DetalleLugarActivity::class.java).apply {
                             putExtra("nombre", lugar.nombre)
                             putExtra("descripcion", lugar.descripcion)

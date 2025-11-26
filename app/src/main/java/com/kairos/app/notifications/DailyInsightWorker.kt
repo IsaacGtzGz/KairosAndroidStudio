@@ -56,10 +56,10 @@ class DailyInsightWorker(
                 when (intensidad) {
                     1 -> "Pasos: ${insight?.pasosHoy ?: 0}" // Baja: solo datos
                     2 -> "Pasos: ${insight?.pasosHoy ?: 0} | ${insight?.mensaje?.take(50) ?: ""}..." // Media: resumen
-                    else -> insight?.mensaje ?: "🌟 Revisa tu progreso" // Alta: mensaje completo
+                    else -> insight?.mensaje ?: "Revisa tu progreso" // Alta: mensaje completo
                 }
             } else {
-                "📊 Revisa tu progreso en Kairos"
+                "Revisa tu progreso en Kairos"
             }
 
             // Enviar notificación solo si intensidad > 0
@@ -72,7 +72,7 @@ class DailyInsightWorker(
             // Si falla, solo enviar si intensidad es alta
             val sessionManager = SessionManager(applicationContext)
             if (sessionManager.fetchIntensity() >= 2) {
-                enviarNotificacion("🌟 ¡Revisa tu progreso en Kairos!")
+                enviarNotificacion("¡Revisa tu progreso en Kairos!")
             }
             Result.success()
         }

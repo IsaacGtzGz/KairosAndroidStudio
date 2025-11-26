@@ -164,6 +164,7 @@ class PerfilActivity : ComponentActivity() {
                                 value = nombre,
                                 onValueChange = { nombre = it },
                                 label = { Text("Nombre") },
+                                leadingIcon = { Icon(Icons.Default.Person, null) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -171,6 +172,16 @@ class PerfilActivity : ComponentActivity() {
                                 value = apellido,
                                 onValueChange = { apellido = it },
                                 label = { Text("Apellido") },
+                                leadingIcon = { Icon(Icons.Default.Person, null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedTextField(
+                                value = currentEmail,
+                                onValueChange = { },
+                                label = { Text("Correo (no editable)") },
+                                leadingIcon = { Icon(Icons.Default.Email, null) },
+                                enabled = false,
                                 modifier = Modifier.fillMaxWidth()
                             )
 
@@ -197,16 +208,17 @@ class PerfilActivity : ComponentActivity() {
                                     scope.launch {
                                         try {
                                             // ✅ 1. Convertir imagen a Base64 si hay nueva
+                                            // 1. Convertir imagen a Base64 solo si hay nueva
                                             val fotoBase64 = selectedImageUri.value?.let { uri ->
                                                 uriToBase64(uri)
-                                            } ?: currentPic // Si no hay nueva, mantener la actual
+                                            }
                                             
-                                            // 2. Crear objeto de actualización
+                                            // 2. Crear objeto de actualización (sin idUsuario, va en la URL)
                                             val request = PerfilUpdateRequest(
-                                                idUsuario = currentId,
-                                                nombre = nombre,
-                                                apellido = apellido,
-                                                fotoPerfil = fotoBase64
+                                                nombre = nombre.ifBlank { null },
+                                                apellido = apellido.ifBlank { null },
+                                                correo = null, // No se edita el correo aquí
+                                                fotoPerfil = fotoBase64 // Solo se envía si hay nueva foto
                                             )
 
                                             // 3. Llamar a la API
@@ -218,11 +230,12 @@ class PerfilActivity : ComponentActivity() {
                                                 if (fotoBase64 != null) {
                                                     sessionManager.saveUserProfilePic(fotoBase64)
                                                 }
-                                                Toast.makeText(this@PerfilActivity, "Perfil actualizado ✓", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(this@PerfilActivity, "Perfil actualizado", Toast.LENGTH_SHORT).show()
                                                 isEditing = false
                                                 selectedImageUri.value = null // Limpiar imagen temporal
                                             } else {
-                                                Toast.makeText(this@PerfilActivity, "Error al guardar cambios", Toast.LENGTH_SHORT).show()
+                                                val errorMsg = response.errorBody()?.string() ?: "Error desconocido"
+                                                Toast.makeText(this@PerfilActivity, "Error al guardar: ${response.code()}", Toast.LENGTH_LONG).show()
                                             }
                                         } catch (e: Exception) {
                                             // Fallback para la demo si la API falla: Guardar localmente
@@ -263,18 +276,39 @@ class PerfilActivity : ComponentActivity() {
         }
     }
     
-    // ✅ Función para convertir URI de imagen a Base64
+    // Función para convertir URI de imagen a Base64 con compresión
     private fun uriToBase64(uri: Uri): String? {
         return try {
             val inputStream = contentResolver.openInputStream(uri)
-            val bytes = inputStream?.readBytes()
+            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
             inputStream?.close()
             
-            // Convertir a Base64 con prefijo para imágenes
+            // Comprimir imagen para reducir tamaño (calidad 70%, max 800px)
+            val outputStream = java.io.ByteArrayOutputStream()
+            val maxDimension = 800
+            val scale = minOf(
+                maxDimension.toFloat() / bitmap.width,
+                maxDimension.toFloat() / bitmap.height,
+                1f
+            )
+            val scaledBitmap = if (scale < 1f) {
+                android.graphics.Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * scale).toInt(),
+                    (bitmap.height * scale).toInt(),
+                    true
+                )
+            } else bitmap
+            
+            scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+            val bytes = outputStream.toByteArray()
+            
+            // Convertir a Base64 con prefijo
             val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
             "data:image/jpeg;base64,$base64"
         } catch (e: Exception) {
             e.printStackTrace()
+            Toast.makeText(this, "Error al procesar imagen: ${e.message}", Toast.LENGTH_SHORT).show()
             null
         }
     }

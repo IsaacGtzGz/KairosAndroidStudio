@@ -31,7 +31,7 @@ class AjustesActivity : ComponentActivity() {
         val sessionManager = SessionManager(this)
 
         // Cargar datos guardados
-        val savedInterests = sessionManager.fetchInterests() // 👈 Carga intereses
+        val savedInterests = sessionManager.fetchInterests() // Carga intereses
         val savedDays = sessionManager.fetchActiveDays()
         val savedIntensity = sessionManager.fetchIntensity()
 
@@ -40,7 +40,7 @@ class AjustesActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("Configuración") }, // 👈 Nombre corregido
+                            title = { Text("Configuración") }, // Nombre corregido
                             navigationIcon = {
                                 IconButton(onClick = { finish() }) {
                                     Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
@@ -55,7 +55,7 @@ class AjustesActivity : ComponentActivity() {
                         initialDays = savedDays,
                         initialIntensity = savedIntensity,
                         onSave = { interests, days, intensity ->
-                            sessionManager.saveInterests(interests) // 👈 Guarda intereses
+                            sessionManager.saveInterests(interests) // Guarda intereses
                             sessionManager.saveActiveDays(days)
                             sessionManager.saveIntensity(intensity)
                             Toast.makeText(this, "Preferencias guardadas", Toast.LENGTH_SHORT).show()
@@ -191,10 +191,10 @@ fun AjustesScreen(
 
         // Info de notificaciones (DINÁMICO según intensidad)
         val notificationText = when (selectedIntensity) {
-            0 -> "🔕 Notificaciones desactivadas. No recibirás mensajes del coach."
-            1 -> "📊 Notificaciones mínimas a las 8 PM: solo pasos del día."
-            2 -> "💬 Notificaciones moderadas a las 8 PM: pasos + motivación corta."
-            3 -> "🚀 Notificaciones completas a las 8 PM: análisis detallado personalizado."
+            0 -> "Notificaciones desactivadas. No recibirás mensajes del coach."
+            1 -> "Notificaciones mínimas a las 8 PM: solo pasos del día."
+            2 -> "Notificaciones moderadas a las 8 PM: pasos + motivación corta."
+            3 -> "Notificaciones completas a las 8 PM: análisis detallado personalizado."
             else -> "Configura tu frecuencia de notificaciones."
         }
         

@@ -151,7 +151,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             KairosTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     // Estado del insight (se carga del servidor)
-                    var aiMessage by remember { mutableStateOf("🌅 Cargando tu análisis personalizado...") }
+                    var aiMessage by remember { mutableStateOf("Cargando tu análisis personalizado...") }
                     
                     // Efecto para cargar el insight
                     LaunchedEffect(Unit) {
@@ -186,7 +186,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         },
                         usageTime = socialMediaUsageTime.value,
                         onConfigClick = { startActivity(Intent(this, AjustesActivity::class.java)) },
-                        insightMessage = aiMessage // 👇 AHORA SÍ FUNCIONARÁ
+                        insightMessage = aiMessage // AHORA SÍ FUNCIONARÁ
                     )
                 }
             }
@@ -323,7 +323,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                 val response = RetrofitClient.instance.getInsight(userId)
                 if (response.isSuccessful) {
                     val insight = response.body()
-                    val mensaje = insight?.mensaje ?: "💙 Sigue explorando y cuidando tu bienestar."
+                    val mensaje = insight?.mensaje ?: "Sigue explorando y cuidando tu bienestar."
                     // Actualizamos en el hilo principal
                     kotlinx.coroutines.withContext(Dispatchers.Main) {
                         onResult(mensaje)
@@ -331,13 +331,13 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                 } else {
                     // Fallback si el servidor falla
                     kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        onResult("🌞 Recuerda: cada paso cuenta, cada minuto lejos de la pantalla es vida ganada.")
+                        onResult("Recuerda: cada paso cuenta, cada minuto lejos de la pantalla es vida ganada.")
                     }
                 }
             } catch (e: Exception) {
                 // Fallback si hay error de conexión
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
-                    onResult("💡 No se pudo conectar al servidor. Sigue explorando.")
+                    onResult("No se pudo conectar al servidor. Sigue explorando.")
                 }
             }
         }
@@ -482,7 +482,7 @@ fun HomeScreen(
     onUsagePermissionClick: () -> Unit,
     usageTime: String,
     onConfigClick: () -> Unit,
-    insightMessage: String // 👈 PARÁMETRO AGREGADO AQUÍ
+    insightMessage: String // PARÁMETRO AGREGADO AQUÍ
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -546,7 +546,11 @@ fun HomeScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Kairos", fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("🌿", fontSize = 20.sp)
+                            Icon(
+                                Icons.Default.Explore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     },
                     navigationIcon = {
@@ -598,10 +602,15 @@ fun HomeScreen(
                         .verticalScroll(scrollState)
                 ) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    AnimatedGreetingPremium(userName = userName)
+                    ModernGreeting(userName = userName)
 
-                    Spacer(modifier = Modifier.height(24.dp))
-                    InsightCardPremium(insight = insightMessage)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    ModernInsightCard(
+                        insight = insightMessage,
+                        onChatClick = {
+                            context.startActivity(Intent(context, CoachChatActivity::class.java))
+                        }
+                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -616,7 +625,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    DiscoverCarouselPremium()
+                    DiscoverCarouselPremium(onOpenMap = onOpenMap)
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -674,8 +683,6 @@ fun HomeScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(32.dp))
-                    NatureStripPremium()
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
@@ -775,7 +782,12 @@ fun InsightCard(insight: String) {
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("💬", fontSize = 14.sp)
+                        Icon(
+                            Icons.Default.ChatBubbleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -936,15 +948,8 @@ fun EmergencyContactCard(contactNumber: String?, onClick: () -> Unit) {
     }
 }
 
-@Composable
-fun NatureStrip() {
-    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        repeat(5) { Card(modifier = Modifier.size(60.dp, 80.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🌳") } } }
-    }
-}
-
 // =============================================
-// TARJETAS PREMIUM (CROMADAS) 🔥
+// TARJETAS PREMIUM (CROMADAS)
 // =============================================
 
 @Composable
@@ -1128,52 +1133,80 @@ fun UsageMonitorCardPremium(hasPermission: Boolean, time: String, onClick: () ->
 }
 
 // =============================================
-// COMPONENTES PREMIUM V2 🔥
+// COMPONENTES PREMIUM V2
 // =============================================
 
 @Composable
-fun AnimatedGreetingPremium(userName: String) {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave")
-    val waveOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "waveAnimation"
-    )
+fun ModernGreeting(userName: String) {
+    val currentHour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    val greeting = when {
+        currentHour < 12 -> "Buenos días"
+        currentHour < 19 -> "Buenas tardes"
+        else -> "Buenas noches"
+    }
     
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "¡Hola",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Light,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "👋",
-                fontSize = 32.sp,
-                modifier = Modifier.rotate(sin(waveOffset * PI.toFloat() / 180) * 15f)
-            )
+    val greetingIcon = when {
+        currentHour < 12 -> Icons.Default.WbSunny
+        currentHour < 19 -> Icons.Default.WbTwilight
+        else -> Icons.Default.Nightlight
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                        ),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = greetingIcon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    greeting,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    userName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
-        Text(
-            userName,
-            style = MaterialTheme.typography.displayMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            "Listo para una nueva aventura?",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
 @Composable
-fun InsightCardPremium(insight: String) {
+fun ModernInsightCard(insight: String, onChatClick: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(insight) {
         visible = false
@@ -1181,129 +1214,94 @@ fun InsightCardPremium(insight: String) {
         visible = true
     }
     
-    val context = LocalContext.current
-    
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(800)) + slideInVertically(initialOffsetY = { it / 3 })
+        enter = fadeIn(animationSpec = tween(600)) + slideInVertically(initialOffsetY = { it / 4 })
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    context.startActivity(Intent(context, CoachChatActivity::class.java))
-                },
-            shape = RoundedCornerShape(28.dp),
+                .clickable(onClick = onChatClick),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
             ),
-            elevation = CardDefaults.cardElevation(0.dp)
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            Box {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(1000f, 1000f)
-                            )
-                        )
-                )
-                
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
-                    modifier = Modifier.padding(24.dp),
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(48.dp)
                             .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.tertiary
-                                    )
-                                ),
-                                shape = CircleShape
-                            )
-                            .padding(2.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                shape = CircleShape
+                                MaterialTheme.colorScheme.secondary,
+                                shape = RoundedCornerShape(12.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SmartToy,
+                            imageVector = Icons.Default.Psychology,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            tint = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "TU COACH IA",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.5.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.tertiary,
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
                         Text(
-                            text = insight,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                lineHeight = 24.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
+                            "Análisis del Día",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
-                            Text(
-                                "Iniciar conversación",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Text(
+                            "Basado en tu actividad",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
                     }
+                    
+                    Icon(
+                        Icons.Default.ChatBubbleOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = insight,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedButton(
+                    onClick = onChatClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Forum,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Conversar con el Coach",
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -1312,7 +1310,7 @@ fun InsightCardPremium(insight: String) {
 
 @OptIn(ExperimentalPagerApi::class)
 @Composable
-fun DiscoverCarouselPremium() {
+fun DiscoverCarouselPremium(onOpenMap: () -> Unit) {
     val items = listOf(
         Triple("Naturaleza", "Parques y senderos naturales", Icons.Default.Terrain) to 
             listOf(Color(0xFF4CAF50), Color(0xFF81C784)),
@@ -1321,6 +1319,8 @@ fun DiscoverCarouselPremium() {
         Triple("Local", "Mercados y zonas comerciales", Icons.Default.Storefront) to 
             listOf(Color(0xFFFF7043), Color(0xFFFFAB91))
     )
+    
+    val context = LocalContext.current
 
     val pagerState = rememberPagerState(initialPage = 0)
 
@@ -1342,7 +1342,11 @@ fun DiscoverCarouselPremium() {
         Card(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 8.dp)
+                .clickable {
+                    Toast.makeText(context, "Explorando $title en el mapa", Toast.LENGTH_SHORT).show()
+                    onOpenMap()
+                },
             shape = RoundedCornerShape(28.dp),
             elevation = CardDefaults.cardElevation(8.dp)
         ) {
@@ -1495,26 +1499,22 @@ fun StepCounterCardPremiumV2(steps: String, hasPermission: Boolean, onClick: () 
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Pasos",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("🚶", fontSize = 16.sp)
-                        }
+                        Text(
+                            text = "Pasos hoy",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     Column {
                         Text(
-                            text = "Toca aquí",
+                            text = "Activar",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Activar contador",
+                            text = "Contador de pasos",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1585,26 +1585,22 @@ fun UsageMonitorCardPremiumV2(hasPermission: Boolean, time: String, onClick: () 
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Tiempo Apps",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("📱", fontSize = 16.sp)
-                        }
+                        Text(
+                            text = "Uso digital",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     Column {
                         Text(
-                            text = "Toca aquí",
+                            text = "Activar",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Activar monitoreo",
+                            text = "Monitoreo de apps",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1690,8 +1686,12 @@ fun EmergencyContactCardPremium(contactNumber: String?, onClick: () -> Unit) {
 }
 
 @Composable
-fun NatureStripPremium() {
-    val emojis = listOf("🌳", "🌿", "🌺", "🦋", "🍃", "🌸", "🌻", "🌲")
+fun QuickActionsStrip(onRecompensasClick: () -> Unit, onMapClick: () -> Unit, onAjustesClick: () -> Unit) {
+    val actions = listOf(
+        Triple("Recompensas", Icons.Default.CardGiftcard, onRecompensasClick),
+        Triple("Mapa", Icons.Default.Map, onMapClick),
+        Triple("Ajustes", Icons.Default.Settings, onAjustesClick)
+    )
     
     Card(
         modifier = Modifier
@@ -1700,28 +1700,44 @@ fun NatureStripPremium() {
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        ),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            emojis.forEach { emoji ->
-                Box(
+            actions.forEach { (label, icon, onClick) ->
+                Column(
                     modifier = Modifier
-                        .size(72.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(18.dp)
-                        ),
-                    contentAlignment = Alignment.Center
+                        .weight(1f)
+                        .clickable(onClick = onClick),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = emoji,
-                        fontSize = 36.sp
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
