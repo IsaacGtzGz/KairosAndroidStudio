@@ -59,6 +59,19 @@ class MainActivity : ComponentActivity() {
                                             val session = SessionManager(this@MainActivity)
                                             session.saveAuthToken(data.token)
 
+                                            // GUARDAR DATOS REALES DEL USUARIO
+                                            data.user?.let { user ->
+                                                // Usamos el operador Elvis (?: 0)
+                                                session.saveUserId(user.id ?: 0)
+
+                                                session.saveUserName("${user.nombre} ${user.apellido}")
+                                                session.saveUserEmail(user.correo)
+                                                // Si viene foto, la guardamos
+                                                if (!user.fotoPerfil.isNullOrEmpty()) {
+                                                    session.saveUserProfilePic(user.fotoPerfil)
+                                                }
+                                            }
+
                                             Toast.makeText(
                                                 this@MainActivity,
                                                 "Bienvenido ${data.user?.nombre}",

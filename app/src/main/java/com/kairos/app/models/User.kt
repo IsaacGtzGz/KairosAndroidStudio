@@ -1,6 +1,9 @@
 package com.kairos.app.models
 
+import com.google.gson.annotations.SerializedName
+
 data class User(
+    @SerializedName("idUsuario")
     val id: Int? = null,
     val nombre: String,
     val apellido: String,

@@ -81,4 +81,15 @@ class SessionManager(context: Context) {
     fun fetchInterests(): Set<String> {
         return prefs.getStringSet("user_interests", emptySet()) ?: emptySet()
     }
+
+
+    // --- PERFIL DE USUARIO ---
+    fun saveUserName(name: String) { prefs.edit().putString("user_name", name).apply() }
+    fun fetchUserName(): String? { return prefs.getString("user_name", "Aventurero") }
+
+    fun saveUserEmail(email: String) { prefs.edit().putString("user_email", email).apply() }
+    fun fetchUserEmail(): String? { return prefs.getString("user_email", "usuario@kairos.com") }
+
+    fun saveUserProfilePic(url: String) { prefs.edit().putString("user_pic", url).apply() }
+    fun fetchUserProfilePic(): String? { return prefs.getString("user_pic", null) }
 }
