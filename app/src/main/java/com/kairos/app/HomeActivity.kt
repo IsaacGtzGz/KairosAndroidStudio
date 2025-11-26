@@ -36,10 +36,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.withContext
 import com.google.accompanist.pager.*
@@ -57,9 +65,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.Calendar
 import androidx.work.*
 import com.kairos.app.notifications.DailyInsightWorker
-import java.util.Calendar
 
 class HomeActivity : ComponentActivity(), SensorEventListener {
 
@@ -589,18 +597,26 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp)
                         .verticalScroll(scrollState)
                 ) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    AnimatedGreeting(userName = userName)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    AnimatedGreetingPremium(userName = userName)
 
-                    // 👇 AQUÍ VA LA NUEVA TARJETA
-                    Spacer(modifier = Modifier.height(16.dp))
-                    InsightCard(insight = insightMessage)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    InsightCardPremium(insight = insightMessage)
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Text("Explora tu ciudad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DiscoverCarousel()
+                    Text(
+                        "Explora tu ciudad",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Descubre lugares increíbles",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DiscoverCarouselPremium()
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -612,12 +628,12 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Box(modifier = Modifier.weight(1f)) {
-                            StepCounterCardPremium(steps, hasActivityPermission, onStepsPermissionClick)
+                            StepCounterCardPremiumV2(steps, hasActivityPermission, onStepsPermissionClick)
                         }
                         Box(modifier = Modifier.weight(1f)) {
-                            UsageMonitorCardPremium(hasUsagePermission, usageTime, onUsagePermissionClick)
+                            UsageMonitorCardPremiumV2(hasUsagePermission, usageTime, onUsagePermissionClick)
                         }
                     }
 
@@ -626,20 +642,40 @@ fun HomeScreen(
                     Text("Accesos Rápidos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    EmergencyContactCard(emergencyContact, onSelectContact)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    EmergencyContactCardPremium(emergencyContact, onSelectContact)
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
                     Button(
                         onClick = onRecompensasClick,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(20.dp)
                     ) {
-                        Icon(Icons.Default.CardGiftcard, null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ver Recompensas Disponibles")
+                        Icon(
+                            Icons.Default.CardGiftcard,
+                            null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "Ver Recompensas",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            null,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-                    NatureStrip()
+                    Spacer(modifier = Modifier.height(32.dp))
+                    NatureStripPremium()
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
@@ -1085,6 +1121,608 @@ fun UsageMonitorCardPremium(hasPermission: Boolean, time: String, onClick: () ->
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+// =============================================
+// COMPONENTES PREMIUM V2 🔥
+// =============================================
+
+@Composable
+fun AnimatedGreetingPremium(userName: String) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val waveOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "waveAnimation"
+    )
+    
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "¡Hola",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "👋",
+                fontSize = 32.sp,
+                modifier = Modifier.rotate(sin(waveOffset * PI.toFloat() / 180) * 15f)
+            )
+        }
+        Text(
+            userName,
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "Listo para una nueva aventura?",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun InsightCardPremium(insight: String) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(insight) {
+        visible = false
+        kotlinx.coroutines.delay(100)
+        visible = true
+    }
+    
+    val context = LocalContext.current
+    
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(800)) + slideInVertically(initialOffsetY = { it / 3 })
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    context.startActivity(Intent(context, CoachChatActivity::class.java))
+                },
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(0.dp)
+        ) {
+            Box {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset(1000f, 1000f)
+                            )
+                        )
+                )
+                
+                Row(
+                    modifier = Modifier.padding(24.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.tertiary
+                                    )
+                                ),
+                                shape = CircleShape
+                            )
+                            .padding(2.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SmartToy,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "TU COACH IA",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.5.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.tertiary,
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = insight,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                lineHeight = 24.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                "Iniciar conversación",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalPagerApi::class)
+@Composable
+fun DiscoverCarouselPremium() {
+    val items = listOf(
+        Triple("Naturaleza", "Parques y senderos naturales", Icons.Default.Terrain) to 
+            listOf(Color(0xFF4CAF50), Color(0xFF81C784)),
+        Triple("Cultura", "Museos y patrimonio cultural", Icons.Default.AccountBalance) to 
+            listOf(Color(0xFF5C6BC0), Color(0xFF9FA8DA)),
+        Triple("Local", "Mercados y zonas comerciales", Icons.Default.Storefront) to 
+            listOf(Color(0xFFFF7043), Color(0xFFFFAB91))
+    )
+
+    val pagerState = rememberPagerState(initialPage = 0)
+
+    HorizontalPager(
+        state = pagerState,
+        count = items.size,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp)
+    ) { page ->
+        val item = items[page]
+        val triple = item.first
+        val title = triple.first
+        val desc = triple.second
+        val icon = triple.third
+        val colors = item.second
+
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            shape = RoundedCornerShape(28.dp),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = colors.map { it.copy(alpha = 0.15f) },
+                                start = Offset(0f, 0f),
+                                end = Offset(1000f, 1000f)
+                            )
+                        )
+                )
+
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors[0].copy(alpha = 0.08f),
+                    modifier = Modifier
+                        .size(180.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 40.dp, y = 40.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = Brush.linearGradient(colors),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    
+                    Text(
+                        text = desc,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(
+                                colors[0].copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            "Explorar ahora",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors[0]
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            tint = colors[0],
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StepCounterCardPremiumV2(steps: String, hasPermission: Boolean, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Icon(
+                Icons.Default.DirectionsWalk,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                modifier = Modifier
+                    .size(140.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 30.dp, y = 30.dp)
+            )
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.DirectionsWalk,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                if (hasPermission) {
+                    Column {
+                        Text(
+                            text = steps,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Pasos",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("🚶", fontSize = 16.sp)
+                        }
+                    }
+                } else {
+                    Column {
+                        Text(
+                            text = "Toca aquí",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Activar contador",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UsageMonitorCardPremiumV2(hasPermission: Boolean, time: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Icon(
+                Icons.Default.QueryStats,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
+                modifier = Modifier
+                    .size(140.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 30.dp, y = 30.dp)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.secondary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.QueryStats,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                if (hasPermission) {
+                    Column {
+                        Text(
+                            text = time,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Tiempo Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("📱", fontSize = 16.sp)
+                        }
+                    }
+                } else {
+                    Column {
+                        Text(
+                            text = "Toca aquí",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Activar monitoreo",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmergencyContactCardPremium(contactNumber: String?, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (contactNumber != null) 
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+            else 
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        if (contactNumber != null)
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                        else
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Phone,
+                    contentDescription = null,
+                    tint = if (contactNumber != null)
+                        MaterialTheme.colorScheme.tertiary
+                    else
+                        MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Contacto de Emergencia",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    contactNumber ?: "No configurado • Toca para agregar",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (contactNumber != null)
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    else
+                        MaterialTheme.colorScheme.error
+                )
+            }
+            
+            Icon(
+                if (contactNumber != null) Icons.Default.Edit else Icons.Default.Add,
+                contentDescription = null,
+                tint = if (contactNumber != null)
+                    MaterialTheme.colorScheme.tertiary
+                else
+                    MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun NatureStripPremium() {
+    val emojis = listOf("🌳", "🌿", "🌺", "🦋", "🍃", "🌸", "🌻", "🌲")
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            emojis.forEach { emoji ->
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(18.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = emoji,
+                        fontSize = 36.sp
+                    )
                 }
             }
         }
