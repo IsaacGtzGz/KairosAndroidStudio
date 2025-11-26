@@ -52,6 +52,7 @@
         <activity android:name=".DetalleLugarActivity" />
         <activity android:name=".AjustesActivity" />
         <activity android:name=".PerfilActivity" />
+        <activity android:name=".CoachChatActivity" />
         
         <meta-data
             android:name="com.google.android.geo.API_KEY"

@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -114,11 +116,11 @@ class PerfilActivity : ComponentActivity() {
                         // --- FOTO DE PERFIL ---
                         Box(
                             modifier = Modifier
-                                .size(140.dp)
+                                .size(150.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                 .clickable(enabled = isEditing) {
-                                    // Abrir galería solo si está editando
                                     checkAndRequestGalleryPermission()
                                 },
                             contentAlignment = Alignment.Center
@@ -194,26 +196,31 @@ class PerfilActivity : ComponentActivity() {
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            // 1. Crear objeto de actualización
-                                            // Nota: La imagen la mandamos como string (URI) por ahora para el MVP
+                                            // ✅ 1. Convertir imagen a Base64 si hay nueva
+                                            val fotoBase64 = selectedImageUri.value?.let { uri ->
+                                                uriToBase64(uri)
+                                            } ?: currentPic // Si no hay nueva, mantener la actual
+                                            
+                                            // 2. Crear objeto de actualización
                                             val request = PerfilUpdateRequest(
                                                 idUsuario = currentId,
                                                 nombre = nombre,
                                                 apellido = apellido,
-                                                fotoPerfil = selectedImageUri.value?.toString() ?: currentPic
+                                                fotoPerfil = fotoBase64
                                             )
 
-                                            // 2. Llamar a la API
+                                            // 3. Llamar a la API
                                             val response = RetrofitClient.instance.updateProfile(currentId, request)
 
                                             if (response.isSuccessful) {
-                                                // 3. Actualizar sesión local
+                                                // 4. Actualizar sesión local
                                                 sessionManager.saveUserName("$nombre $apellido")
-                                                if (selectedImageUri.value != null) {
-                                                    sessionManager.saveUserProfilePic(selectedImageUri.value.toString())
+                                                if (fotoBase64 != null) {
+                                                    sessionManager.saveUserProfilePic(fotoBase64)
                                                 }
-                                                Toast.makeText(this@PerfilActivity, "Perfil actualizado", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(this@PerfilActivity, "Perfil actualizado ✓", Toast.LENGTH_SHORT).show()
                                                 isEditing = false
+                                                selectedImageUri.value = null // Limpiar imagen temporal
                                             } else {
                                                 Toast.makeText(this@PerfilActivity, "Error al guardar cambios", Toast.LENGTH_SHORT).show()
                                             }
@@ -253,6 +260,22 @@ class PerfilActivity : ComponentActivity() {
                 galleryLauncher.launch("image/*")
             }
             else -> requestPermissionLauncher.launch(permission)
+        }
+    }
+    
+    // ✅ Función para convertir URI de imagen a Base64
+    private fun uriToBase64(uri: Uri): String? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri)
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
+            
+            // Convertir a Base64 con prefijo para imágenes
+            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            "data:image/jpeg;base64,$base64"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }

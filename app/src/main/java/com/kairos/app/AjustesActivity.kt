@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -187,6 +188,71 @@ fun AjustesScreen(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        // Info de notificaciones (DINÁMICO según intensidad)
+        val notificationText = when (selectedIntensity) {
+            0 -> "🔕 Notificaciones desactivadas. No recibirás mensajes del coach."
+            1 -> "📊 Notificaciones mínimas a las 8 PM: solo pasos del día."
+            2 -> "💬 Notificaciones moderadas a las 8 PM: pasos + motivación corta."
+            3 -> "🚀 Notificaciones completas a las 8 PM: análisis detallado personalizado."
+            else -> "Configura tu frecuencia de notificaciones."
+        }
+        
+        val diasTexto = if (selectedDays.isEmpty()) "ningún día" else selectedDays.joinToString(", ")
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = when (selectedIntensity) {
+                    0 -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    1 -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                    2 -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    3 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            ),
+            elevation = CardDefaults.cardElevation(4.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Tu configuración",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    notificationText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                
+                if (selectedDays.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Días activos: $diasTexto",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Botón Guardar
         Button(

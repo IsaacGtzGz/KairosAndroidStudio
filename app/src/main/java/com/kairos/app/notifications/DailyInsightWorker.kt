@@ -29,27 +29,51 @@ class DailyInsightWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            // Obtener el userId de la sesión
             val sessionManager = SessionManager(applicationContext)
             val userId = sessionManager.fetchUserId()
+            
+            // ✅ VERIFICAR PREFERENCIAS DEL USUARIO
+            val activeDays = sessionManager.fetchActiveDays()
+            val intensidad = sessionManager.fetchIntensity()
+            
+            // Verificar si hoy es un día activo
+            val dayAbbreviations = mapOf(
+                1 to "Dom", 2 to "Lun", 3 to "Mar", 4 to "Mié",
+                5 to "Jue", 6 to "Vie", 7 to "Sáb"
+            )
+            val todayAbbr = dayAbbreviations[java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)]
+            
+            if (activeDays.isNotEmpty() && !activeDays.contains(todayAbbr)) {
+                // Usuario no quiere notificaciones hoy
+                return Result.success()
+            }
 
-            // Obtener el insight del servidor
+            // Obtener insight del servidor
             val response = RetrofitClient.instance.getInsight(userId)
             
             val mensaje = if (response.isSuccessful) {
                 val insight = response.body()
-                "Pasos hoy: ${insight?.pasosHoy ?: 0} | ${insight?.mensaje ?: "Sigue así"}"
+                when (intensidad) {
+                    1 -> "Pasos: ${insight?.pasosHoy ?: 0}" // Baja: solo datos
+                    2 -> "Pasos: ${insight?.pasosHoy ?: 0} | ${insight?.mensaje?.take(50) ?: ""}..." // Media: resumen
+                    else -> insight?.mensaje ?: "🌟 Revisa tu progreso" // Alta: mensaje completo
+                }
             } else {
-                "📊 Revisa tu progreso de hoy en Kairos"
+                "📊 Revisa tu progreso en Kairos"
             }
 
-            // Enviar la notificación
-            enviarNotificacion(mensaje)
+            // Enviar notificación solo si intensidad > 0
+            if (intensidad > 0) {
+                enviarNotificacion(mensaje)
+            }
             
             Result.success()
         } catch (e: Exception) {
-            // Si falla, enviar notificación genérica
-            enviarNotificacion("🌟 ¡Es hora de revisar tu progreso en Kairos!")
+            // Si falla, solo enviar si intensidad es alta
+            val sessionManager = SessionManager(applicationContext)
+            if (sessionManager.fetchIntensity() >= 2) {
+                enviarNotificacion("🌟 ¡Revisa tu progreso en Kairos!")
+            }
             Result.success()
         }
     }

@@ -266,10 +266,22 @@ fun ActualMapScreen(
                 uiSettings = MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false)
             ) {
                 lugaresFiltrados.forEach { lugar ->
+                    // ✅ Icono personalizado según categoría
+                    val iconoColor = when (lugar.idCategoria) {
+                        1 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_GREEN // Parques
+                        2 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_VIOLET // Museos
+                        3 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_ORANGE // Cafeterías
+                        4 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_CYAN // Senderismo
+                        5 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_MAGENTA // Arte
+                        6 -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_RED // Comida
+                        else -> com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_AZURE // Default
+                    }
+                    
                     Marker(
                         state = MarkerState(position = LatLng(lugar.latitud, lugar.longitud)),
                         title = lugar.nombre,
                         snippet = lugar.descripcion ?: "Ver detalles",
+                        icon = com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(iconoColor),
                         onClick = {
                             selectedLugar = lugar
                             false

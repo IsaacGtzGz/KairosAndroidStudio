@@ -18,18 +18,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -127,14 +130,17 @@ class RegisterActivity : ComponentActivity() {
                             onRegisterClick = { nombre, apellido, email, password ->
                                 lifecycleScope.launch {
                                     try {
-                                        // PASO 1: Aún enviamos 'null' como fotoPerfil.
-                                        // La lógica de subir la imagen se hará después.
+                                        // ✅ Convertir imagen a Base64 si existe
+                                        val fotoBase64 = imageUri.value?.let { uri ->
+                                            uriToBase64(uri)
+                                        }
+                                        
                                         val user = User(
                                             nombre = nombre,
                                             apellido = apellido,
                                             correo = email,
                                             contrasena = password,
-                                            fotoPerfil = null // Backend no está listo para la imagen
+                                            fotoPerfil = fotoBase64 // ✅ Enviamos la foto en Base64
                                         )
 
                                         val response = RetrofitClient.instance.register(user)
@@ -150,6 +156,10 @@ class RegisterActivity : ComponentActivity() {
                                                     sessionManager.saveUserId(user.id ?: 0)
                                                     sessionManager.saveUserName(user.nombre)
                                                     sessionManager.saveUserEmail(user.correo)
+                                                    // ✅ Guardar la foto si existe
+                                                    if (!user.fotoPerfil.isNullOrEmpty()) {
+                                                        sessionManager.saveUserProfilePic(user.fotoPerfil)
+                                                    }
                                                 }
                                                 
                                                 Toast.makeText(this@RegisterActivity, "Cuenta creada con éxito", Toast.LENGTH_LONG).show()
@@ -183,13 +193,29 @@ class RegisterActivity : ComponentActivity() {
             }
         }
     }
+    
+    // ✅ Función para convertir URI de imagen a Base64
+    private fun uriToBase64(uri: Uri): String? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri)
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
+            
+            // Convertir a Base64 con prefijo para imágenes
+            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            "data:image/jpeg;base64,$base64"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 }
 
 @Composable
 fun RegisterScreen(
-    imageUri: Uri?, // Parámetro para recibir la URI de la imagen
-    onImagePickerClick: () -> Unit, // Parámetro para manejar el click
-    onRegisterClick: (String, String, String, String) -> Unit, // Firma actualizada
+    imageUri: Uri?,
+    onImagePickerClick: () -> Unit,
+    onRegisterClick: (String, String, String, String) -> Unit,
     onLoginClick: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
@@ -197,88 +223,137 @@ fun RegisterScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally, // Centra el picker
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                    )
+                )
+            )
     ) {
-        Text(
-            text = "Completa tus datos",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // --- Selector de Imagen de Perfil ---
-        ProfileImagePicker(
-            imageUri = imageUri,
-            onClick = onImagePickerClick
-        )
-        // ------------------------------------
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Campo Nombre
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Nombre") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Campo Apellido
-        OutlinedTextField(
-            value = apellido,
-            onValueChange = { apellido = it },
-            label = { Text("Apellido") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Campo Correo
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Correo") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Campo Contraseña
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // El campo de texto de fotoPerfil se eliminó
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = { onRegisterClick(name, apellido, email, password) }, // Firma actualizada
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
+                .fillMaxSize()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Registrarse", fontSize = 18.sp)
-        }
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "Únete a Kairos",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "Crea tu cuenta en segundos",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Botón para regresar al Login
-        TextButton(onClick = onLoginClick, modifier = Modifier.fillMaxWidth()) {
-            Text("¿Ya tienes cuenta? Inicia sesión")
+            // Selector de Imagen con diseño mejorado
+            ProfileImagePicker(
+                imageUri = imageUri,
+                onClick = onImagePickerClick
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Tarjeta con formulario
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Campo Nombre
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nombre") },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+
+                    // Campo Apellido
+                    OutlinedTextField(
+                        value = apellido,
+                        onValueChange = { apellido = it },
+                        label = { Text("Apellido") },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+
+                    // Campo Correo
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Correo electrónico") },
+                        leadingIcon = { Icon(Icons.Default.Email, null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+
+                    // Campo Contraseña
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Contraseña") },
+                        leadingIcon = { Icon(Icons.Default.Lock, null) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botón de Registrarse
+            Button(
+                onClick = { onRegisterClick(name, apellido, email, password) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = ButtonDefaults.buttonElevation(4.dp)
+            ) {
+                Icon(Icons.Default.PersonAdd, null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Crear Cuenta", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Botón para regresar al Login
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("¿Ya tienes cuenta?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onLoginClick) {
+                    Text("Inicia sesión aquí", fontWeight = FontWeight.Bold)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

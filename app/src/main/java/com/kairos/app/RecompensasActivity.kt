@@ -114,8 +114,8 @@ class RecompensasActivity : ComponentActivity() {
 fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp),
-        shape = RoundedCornerShape(12.dp)
+        elevation = CardDefaults.cardElevation(6.dp),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
