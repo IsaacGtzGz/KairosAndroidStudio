@@ -95,14 +95,20 @@ class MainActivity : ComponentActivity() {
                                             ).show()
                                         }
                                     } else {
+                                        val errorMessage = when (response.code()) {
+                                            401 -> "Correo o contraseña incorrectos"
+                                            404 -> "Usuario no encontrado"
+                                            500 -> "Error en el servidor. Intenta más tarde"
+                                            else -> "Error al iniciar sesión (${response.code()})"
+                                        }
                                         Toast.makeText(
                                             this@MainActivity,
-                                            "Error: ${response.code()}",
+                                            errorMessage,
                                             Toast.LENGTH_LONG
                                         ).show()
                                     }
                                 } catch (e: Exception) {
-                                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(this@MainActivity, "Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
                                 }
                             }
                         },

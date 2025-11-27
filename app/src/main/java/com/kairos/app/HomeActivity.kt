@@ -66,7 +66,11 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.Calendar
-import androidx.work.*
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.kairos.app.notifications.DailyInsightWorker
 
 class HomeActivity : ComponentActivity(), SensorEventListener {

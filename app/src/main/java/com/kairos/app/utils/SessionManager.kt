@@ -85,10 +85,10 @@ class SessionManager(context: Context) {
 
     // --- PERFIL DE USUARIO ---
     fun saveUserName(name: String) { prefs.edit().putString("user_name", name).apply() }
-    fun fetchUserName(): String? { return prefs.getString("user_name", "Aventurero") }
+    fun fetchUserName(): String? { return prefs.getString("user_name", null) }
 
     fun saveUserEmail(email: String) { prefs.edit().putString("user_email", email).apply() }
-    fun fetchUserEmail(): String? { return prefs.getString("user_email", "usuario@kairos.com") }
+    fun fetchUserEmail(): String? { return prefs.getString("user_email", null) }
 
     fun saveUserProfilePic(url: String) { prefs.edit().putString("user_pic", url).apply() }
     fun fetchUserProfilePic(): String? { return prefs.getString("user_pic", null) }

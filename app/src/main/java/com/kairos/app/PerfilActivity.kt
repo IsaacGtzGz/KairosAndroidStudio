@@ -63,8 +63,8 @@ class PerfilActivity : ComponentActivity() {
 
         // Cargar datos iniciales
         val currentId = sessionManager.fetchUserId()
-        val currentNameFull = sessionManager.fetchUserName() ?: "Usuario Kairos"
-        val currentEmail = sessionManager.fetchUserEmail() ?: "correo@ejemplo.com"
+        val currentNameFull = sessionManager.fetchUserName() ?: ""
+        val currentEmail = sessionManager.fetchUserEmail() ?: ""
         val currentPic = sessionManager.fetchUserProfilePic()
 
         // Separar nombre y apellido para editar (Lógica simple)
@@ -232,18 +232,33 @@ class PerfilActivity : ComponentActivity() {
                                                 }
                                                 Toast.makeText(this@PerfilActivity, "Perfil actualizado", Toast.LENGTH_SHORT).show()
                                                 isEditing = false
-                                                selectedImageUri.value = null // Limpiar imagen temporal
+                                                // No limpiar selectedImageUri para que se vea la foto actualizada inmediatamente
                                             } else {
                                                 val errorMsg = response.errorBody()?.string() ?: "Error desconocido"
-                                                Toast.makeText(this@PerfilActivity, "Error al guardar: ${response.code()}", Toast.LENGTH_LONG).show()
+                                                android.util.Log.e("PerfilActivity", "Error ${response.code()}: $errorMsg")
+                                                
+                                                // Si el API falla pero la foto es válida, guardar localmente
+                                                if (response.code() == 400 || response.code() == 500) {
+                                                    sessionManager.saveUserName("$nombre $apellido")
+                                                    if (fotoBase64 != null) {
+                                                        sessionManager.saveUserProfilePic(fotoBase64)
+                                                    }
+                                                    Toast.makeText(this@PerfilActivity, "Perfil guardado localmente (error servidor: ${response.code()})", Toast.LENGTH_LONG).show()
+                                                    isEditing = false
+                                                } else {
+                                                    Toast.makeText(this@PerfilActivity, "Error al guardar: ${response.code()}", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         } catch (e: Exception) {
-                                            // Fallback para la demo si la API falla: Guardar localmente
+                                            // Fallback: Guardar localmente aunque falle el API
                                             sessionManager.saveUserName("$nombre $apellido")
-                                            if (selectedImageUri.value != null) {
-                                                sessionManager.saveUserProfilePic(selectedImageUri.value.toString())
+                                            selectedImageUri.value?.let { uri ->
+                                                val fotoBase64Fallback = uriToBase64(uri)
+                                                if (fotoBase64Fallback != null) {
+                                                    sessionManager.saveUserProfilePic(fotoBase64Fallback)
+                                                }
                                             }
-                                            Toast.makeText(this@PerfilActivity, "Guardado localmente (Error API)", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(this@PerfilActivity, "Guardado localmente (sin conexión)", Toast.LENGTH_SHORT).show()
                                             isEditing = false
                                         }
                                     }
@@ -283,9 +298,9 @@ class PerfilActivity : ComponentActivity() {
             val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
             inputStream?.close()
             
-            // Comprimir imagen para reducir tamaño (calidad 70%, max 800px)
+            // Comprimir imagen para balance entre calidad y tamaño (calidad 60%, max 400px)
             val outputStream = java.io.ByteArrayOutputStream()
-            val maxDimension = 800
+            val maxDimension = 400 // Balance entre calidad y tamaño de Base64
             val scale = minOf(
                 maxDimension.toFloat() / bitmap.width,
                 maxDimension.toFloat() / bitmap.height,
@@ -300,7 +315,7 @@ class PerfilActivity : ComponentActivity() {
                 )
             } else bitmap
             
-            scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+            scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, outputStream)
             val bytes = outputStream.toByteArray()
             
             // Convertir a Base64 con prefijo
