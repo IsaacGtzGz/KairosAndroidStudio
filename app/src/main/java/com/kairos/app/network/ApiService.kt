@@ -41,7 +41,7 @@ interface ApiService {
 
     // ==================== PROMOCIONES ====================
     @GET("Promociones")
-    suspend fun getPromociones(): Response<PromocionResponse>
+    suspend fun getPromociones(): Response<List<Promocion>>
 
     @GET("Promociones/{id}")
     suspend fun getPromocion(@Path("id") id: Int): Response<Promocion>

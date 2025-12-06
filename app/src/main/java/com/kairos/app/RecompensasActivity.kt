@@ -52,13 +52,15 @@ class RecompensasActivity : ComponentActivity() {
                     try {
                         val response = RetrofitClient.instance.getPromociones()
                         if (response.isSuccessful && response.body() != null) {
-                            // FILTRADO MÁGICO:
-                            // Filtramos para obtener solo las que tengan título (eliminamos las referencias $ref)
-                            promociones = response.body()!!.values.filter { !it.titulo.isNullOrEmpty() }
+                            // Filtramos para obtener solo las que tengan título válido
+                            promociones = response.body()!!.filter { !it.titulo.isNullOrEmpty() }
+                            android.util.Log.d("RecompensasActivity", "Promociones cargadas: ${promociones.size}")
                         } else {
+                            android.util.Log.e("RecompensasActivity", "Error en respuesta: ${response.code()}")
                             Toast.makeText(this@RecompensasActivity, AppConstants.Messages.ERROR_LOADING, Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
+                        android.util.Log.e("RecompensasActivity", "Excepción al cargar promociones", e)
                         e.printStackTrace()
                         Toast.makeText(this@RecompensasActivity, AppConstants.Messages.CONNECTION_ERROR, Toast.LENGTH_SHORT).show()
                     } finally {
