@@ -20,6 +20,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -32,6 +34,13 @@ import kotlinx.coroutines.launch
 import com.kairos.app.models.User
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.NetworkHelper
+import com.kairos.app.utils.isValidEmail
+import com.kairos.app.utils.*
+import com.kairos.app.utils.startActivityWithFadeTransition
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,13 +75,19 @@ class MainActivity : ComponentActivity() {
                                             // GUARDAR DATOS REALES DEL USUARIO
                                             data.user?.let { user ->
                                                 // Usamos el operador Elvis (?: 0)
-                                                session.saveUserId(user.id ?: 0)
+                                                session.saveUserId(user.idUsuario ?: 0)
 
                                                 session.saveUserName("${user.nombre} ${user.apellido}")
                                                 session.saveUserEmail(user.correo)
+                                                // Guardar puntos acumulados
+                                                session.saveUserPoints(user.puntosAcumulados)
                                                 // Si viene foto, la guardamos
                                                 if (!user.fotoPerfil.isNullOrEmpty()) {
                                                     session.saveUserProfilePic(user.fotoPerfil)
+                                                }
+                                                // Guardar rol si viene
+                                                if (!user.rol.isNullOrEmpty()) {
+                                                    session.saveUserRole(user.rol)
                                                 }
                                             }
 
@@ -85,7 +100,7 @@ class MainActivity : ComponentActivity() {
                                             val intent = Intent(this@MainActivity, HomeActivity::class.java).apply {
                                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                             }
-                                            startActivity(intent)
+                                            startActivityWithFadeTransition(intent)
                                             finish()
                                         } else {
                                             Toast.makeText(
@@ -108,13 +123,13 @@ class MainActivity : ComponentActivity() {
                                         ).show()
                                     }
                                 } catch (e: Exception) {
-                                    Toast.makeText(this@MainActivity, "Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(this@MainActivity, "${AppConstants.Messages.LOGIN_ERROR_CONNECTION}: ${e.message}", Toast.LENGTH_LONG).show()
                                 }
                             }
                         },
                         onRegisterClick = {
                             val intent = Intent(this, RegisterActivity::class.java)
-                            startActivity(intent)
+                            startActivityWithSlideTransition(intent)
                         }
                     )
                 }
@@ -131,6 +146,12 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var contentVisible by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        contentVisible = true
+    }
 
     Box(
         modifier = Modifier
@@ -138,8 +159,8 @@ fun LoginScreen(
             .background(
                 brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                        MaterialTheme.colorScheme.surface
+                        AppConstants.Colors.PrimaryGreen.copy(alpha = 0.2f),
+                        Color.White
                     )
                 )
             )
@@ -153,14 +174,17 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center
         ) {
             // Logo/Icono (círculo con gradiente)
+            val pulseScale = rememberPulseAnimation(minScale = 0.95f, maxScale = 1.05f, duration = 2000)
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(120.dp)
+                    .bounceEntrance(contentVisible, delayMillis = 0)
+                    .scale(pulseScale)
                     .background(
                         brush = androidx.compose.ui.graphics.Brush.linearGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary
+                                AppConstants.Colors.PrimaryGreen,
+                                AppConstants.Colors.DarkGreen
                             )
                         ),
                         shape = androidx.compose.foundation.shape.CircleShape
@@ -171,30 +195,37 @@ fun LoginScreen(
                     "K",
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = Color.White
                 )
             }
             
             Spacer(modifier = Modifier.height(24.dp))
             
             // Título
-            Text(
-                text = "KAIROS",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 2.sp
-            )
-            Text(
-                text = "Tu compañero de bienestar",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 48.dp)
-            )
+            Column(
+                modifier = Modifier.fadeInUp(contentVisible, delayMillis = 100),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "KAIROS",
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = AppConstants.Colors.DarkGreen,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "Tu compañero de bienestar",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = AppConstants.Colors.DarkGreen.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 48.dp)
+                )
+            }
 
             // Tarjeta con formulario
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fadeInUp(contentVisible, delayMillis = 200),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(8.dp)
             ) {
@@ -249,9 +280,13 @@ fun LoginScreen(
                         onClick = { onLoginClick(email, password) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .height(56.dp)
+                            .pressEffect(minScale = 0.96f),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                        elevation = ButtonDefaults.buttonElevation(4.dp)
+                        elevation = ButtonDefaults.buttonElevation(4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AppConstants.Colors.DarkGreen
+                        )
                     ) {
                         Icon(Icons.Default.Login, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -263,9 +298,15 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Botón de Registrarse
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fadeInUp(contentVisible, delayMillis = 300)
+            ) {
                 Text("¿No tienes cuenta?", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = onRegisterClick) {
+                TextButton(
+                    onClick = onRegisterClick,
+                    modifier = Modifier.pressEffect(minScale = 0.94f)
+                ) {
                     Text("Regístrate aquí", fontWeight = FontWeight.Bold)
                 }
             }

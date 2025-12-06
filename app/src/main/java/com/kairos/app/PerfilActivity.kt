@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,6 +40,12 @@ import com.kairos.app.models.PerfilUpdateRequest
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.NetworkHelper
+import com.kairos.app.utils.formatPoints
+import com.kairos.app.utils.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import kotlinx.coroutines.launch
 
 class PerfilActivity : ComponentActivity() {
@@ -197,6 +204,50 @@ class PerfilActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.secondary
                             )
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            // TARJETA DE PUNTOS
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        startActivity(Intent(this@PerfilActivity, HistorialPuntosActivity::class.java))
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = AppConstants.Colors.DarkGreen
+                                ),
+                                elevation = CardDefaults.cardElevation(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            "Mis Puntos",
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            fontSize = 14.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "${sessionManager.fetchUserPoints() ?: 0}",
+                                            color = Color.White,
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Default.Stars,
+                                        null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.weight(1f))
@@ -230,7 +281,7 @@ class PerfilActivity : ComponentActivity() {
                                                 if (fotoBase64 != null) {
                                                     sessionManager.saveUserProfilePic(fotoBase64)
                                                 }
-                                                Toast.makeText(this@PerfilActivity, "Perfil actualizado", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(this@PerfilActivity, AppConstants.Messages.PROFILE_UPDATED, Toast.LENGTH_SHORT).show()
                                                 isEditing = false
                                                 // No limpiar selectedImageUri para que se vea la foto actualizada inmediatamente
                                             } else {
@@ -243,10 +294,10 @@ class PerfilActivity : ComponentActivity() {
                                                     if (fotoBase64 != null) {
                                                         sessionManager.saveUserProfilePic(fotoBase64)
                                                     }
-                                                    Toast.makeText(this@PerfilActivity, "Perfil guardado localmente (error servidor: ${response.code()})", Toast.LENGTH_LONG).show()
+                                                    Toast.makeText(this@PerfilActivity, "${AppConstants.Messages.PROFILE_SAVED_OFFLINE} (${response.code()})", Toast.LENGTH_LONG).show()
                                                     isEditing = false
                                                 } else {
-                                                    Toast.makeText(this@PerfilActivity, "Error al guardar: ${response.code()}", Toast.LENGTH_LONG).show()
+                                                    Toast.makeText(this@PerfilActivity, "${AppConstants.Messages.PROFILE_ERROR_SERVER}: ${response.code()}", Toast.LENGTH_LONG).show()
                                                 }
                                             }
                                         } catch (e: Exception) {
@@ -258,7 +309,7 @@ class PerfilActivity : ComponentActivity() {
                                                     sessionManager.saveUserProfilePic(fotoBase64Fallback)
                                                 }
                                             }
-                                            Toast.makeText(this@PerfilActivity, "Guardado localmente (sin conexión)", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(this@PerfilActivity, AppConstants.Messages.PROFILE_SAVED_OFFLINE, Toast.LENGTH_SHORT).show()
                                             isEditing = false
                                         }
                                     }
@@ -323,7 +374,7 @@ class PerfilActivity : ComponentActivity() {
             "data:image/jpeg;base64,$base64"
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Error al procesar imagen: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "${AppConstants.Messages.IMAGE_ERROR}: ${e.message}", Toast.LENGTH_SHORT).show()
             null
         }
     }

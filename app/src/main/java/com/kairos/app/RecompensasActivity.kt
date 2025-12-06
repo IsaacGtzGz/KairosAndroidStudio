@@ -21,9 +21,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.kairos.app.components.EmptyState
+import com.kairos.app.components.LoadingState
 import com.kairos.app.models.Promocion
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.NetworkHelper
+import com.kairos.app.utils.*
 
 class RecompensasActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -34,8 +39,16 @@ class RecompensasActivity : ComponentActivity() {
             KairosTheme {
                 var promociones by remember { mutableStateOf<List<Promocion>>(emptyList()) }
                 var isLoading by remember { mutableStateOf(true) }
+                val sessionManager = com.kairos.app.utils.SessionManager(this)
+                val puntosUsuario = sessionManager.fetchUserPoints() ?: 0
 
                 LaunchedEffect(Unit) {
+                    if (!NetworkHelper.isNetworkAvailable(this@RecompensasActivity)) {
+                        Toast.makeText(this@RecompensasActivity, AppConstants.Messages.NO_INTERNET, Toast.LENGTH_SHORT).show()
+                        isLoading = false
+                        return@LaunchedEffect
+                    }
+                    
                     try {
                         val response = RetrofitClient.instance.getPromociones()
                         if (response.isSuccessful && response.body() != null) {
@@ -43,11 +56,11 @@ class RecompensasActivity : ComponentActivity() {
                             // Filtramos para obtener solo las que tengan título (eliminamos las referencias $ref)
                             promociones = response.body()!!.values.filter { !it.titulo.isNullOrEmpty() }
                         } else {
-                            Toast.makeText(this@RecompensasActivity, "Error al cargar", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@RecompensasActivity, AppConstants.Messages.ERROR_LOADING, Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
-                        e.printStackTrace() // Imprime el error en consola por si acaso
-                        Toast.makeText(this@RecompensasActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
+                        e.printStackTrace()
+                        Toast.makeText(this@RecompensasActivity, AppConstants.Messages.CONNECTION_ERROR, Toast.LENGTH_SHORT).show()
                     } finally {
                         isLoading = false
                     }
@@ -67,10 +80,14 @@ class RecompensasActivity : ComponentActivity() {
                 ) { paddingValues ->
                     Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                         if (isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                            LoadingState(message = "Cargando recompensas...")
                         } else {
                             if (promociones.isEmpty()) {
-                                Text("No hay recompensas activas.", modifier = Modifier.align(Alignment.Center))
+                                EmptyState(
+                                    icon = Icons.Default.CardGiftcard,
+                                    title = "No hay recompensas activas",
+                                    subtitle = "Vuelve pronto para ver nuevas promociones"
+                                )
                             } else {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -97,7 +114,18 @@ class RecompensasActivity : ComponentActivity() {
                                         RecompensaCard(
                                             titulo = titulo,
                                             descripcion = promo.descripcion ?: "Sin descripción",
-                                            imageUrl = imagenDinamica // Usamos la variable dinámica aquí
+                                            imageUrl = imagenDinamica,
+                                            onClick = {
+                                                val intent = android.content.Intent(this@RecompensasActivity, PromocionDetalleActivity::class.java).apply {
+                                                    putExtra("idPromocion", promo.idPromocion)
+                                                    putExtra("titulo", titulo)
+                                                    putExtra("descripcion", promo.descripcion)
+                                                    putExtra("imagen", imagenDinamica)
+                                                    putExtra("puntosRequeridos", 50)
+                                                    putExtra("puntosUsuario", puntosUsuario)
+                                                }
+                                                startActivity(intent)
+                                            }
                                         )
                                     }
                                 }
@@ -111,11 +139,14 @@ class RecompensasActivity : ComponentActivity() {
 }
 
 @Composable
-fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String) {
+fun RecompensaCard(titulo: String, descripcion: String, imageUrl: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressEffect(minScale = 0.97f),
         elevation = CardDefaults.cardElevation(6.dp),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

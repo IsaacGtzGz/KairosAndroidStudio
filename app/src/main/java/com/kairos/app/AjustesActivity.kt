@@ -22,9 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.network.RetrofitClient
+import com.kairos.app.models.Categoria
+import kotlinx.coroutines.launch
 
 class AjustesActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -58,7 +62,7 @@ class AjustesActivity : ComponentActivity() {
                             sessionManager.saveInterests(interests) // Guarda intereses
                             sessionManager.saveActiveDays(days)
                             sessionManager.saveIntensity(intensity)
-                            Toast.makeText(this, "Preferencias guardadas", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, AppConstants.Messages.PREFERENCES_SAVED, Toast.LENGTH_SHORT).show()
                             finish()
                         }
                     )
@@ -68,7 +72,7 @@ class AjustesActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AjustesScreen(
     paddingValues: PaddingValues,
@@ -81,9 +85,31 @@ fun AjustesScreen(
     var selectedInterests by remember { mutableStateOf(initialInterests) }
     var selectedDays by remember { mutableStateOf(initialDays) }
     var selectedIntensity by remember { mutableStateOf(initialIntensity) }
+    var categorias by remember { mutableStateOf<List<Categoria>>(emptyList()) }
+    var isLoadingCategorias by remember { mutableStateOf(true) }
+    
+    val scope = rememberCoroutineScope()
+
+    // Cargar categorías desde el API
+    LaunchedEffect(Unit) {
+        scope.launch {
+            try {
+                val response = RetrofitClient.instance.getCategorias()
+                if (response.isSuccessful && response.body() != null) {
+                    categorias = response.body()!!
+                    android.util.Log.d("AjustesActivity", "Categorías cargadas: ${categorias.size}")
+                } else {
+                    android.util.Log.e("AjustesActivity", "Error al cargar categorías: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AjustesActivity", "Excepción al cargar categorías", e)
+            } finally {
+                isLoadingCategorias = false
+            }
+        }
+    }
 
     // Datos para la UI
-    val availableInterests = listOf("Parques", "Museos", "Cafeterías", "Senderismo", "Arte", "Comida")
     val daysOfWeek = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
     val intensityOptions = listOf("Baja (Solo esencial)", "Media (Recomendado)", "Alta (Coach activo)")
 
@@ -95,29 +121,56 @@ fun AjustesScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // --- SECCIÓN 1: MIS INTERESES (LO NUEVO) ---
+        // --- SECCIÓN 1: MIS INTERESES (DINÁMICO DESDE API) ---
         Column {
             Text("Mis Intereses", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("Selecciona lo que te gusta para personalizar tu mapa.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Grid manual de Chips para Intereses
-            availableInterests.chunked(3).forEach { rowInterests ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowInterests.forEach { interest ->
-                        val isSelected = selectedInterests.contains(interest)
+            if (isLoadingCategorias) {
+                // Mostrar indicador de carga
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (categorias.isEmpty()) {
+                // Sin categorías disponibles
+                Text(
+                    "No hay categorías disponibles",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else {
+                // Grid dinámico de Chips para Intereses (desde API) usando FlowRow
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categorias.forEach { categoria ->
+                        val isSelected = selectedInterests.contains(categoria.nombre)
                         FilterChip(
                             selected = isSelected,
                             onClick = {
                                 selectedInterests = if (isSelected) {
-                                    selectedInterests - interest
+                                    selectedInterests - categoria.nombre
                                 } else {
-                                    selectedInterests + interest
+                                    selectedInterests + categoria.nombre
                                 }
                             },
-                            label = { Text(interest) },
+                            label = { 
+                                Text(
+                                    text = categoria.nombre,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                ) 
+                            },
                             leadingIcon = if (isSelected) {
-                                { Icon(Icons.Default.Check, contentDescription = null) }
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                             } else null
                         )
                     }

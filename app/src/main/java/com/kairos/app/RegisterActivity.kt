@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +43,15 @@ import com.kairos.app.ui.theme.KairosTheme
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.kairos.app.models.User
+import com.kairos.app.models.Categoria
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.NetworkHelper
+import com.kairos.app.utils.isValidEmail
+import com.kairos.app.utils.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 
 class RegisterActivity : ComponentActivity() {
 
@@ -69,7 +78,7 @@ class RegisterActivity : ComponentActivity() {
             // Si el permiso se concede, abre la galería
             galleryLauncher.launch("image/*")
         } else {
-            Toast.makeText(this, "Permiso de galería denegado", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, AppConstants.Messages.PERMISSION_GALLERY_DENIED, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -153,7 +162,7 @@ class RegisterActivity : ComponentActivity() {
                                                 
                                                 // ✅ CRÍTICO: Guardar los datos del usuario registrado
                                                 data.user?.let { user ->
-                                                    sessionManager.saveUserId(user.id ?: 0)
+                                                    sessionManager.saveUserId(user.idUsuario ?: 0)
                                                     sessionManager.saveUserName(user.nombre)
                                                     sessionManager.saveUserEmail(user.correo)
                                                     // ✅ Guardar la foto si existe
@@ -162,7 +171,7 @@ class RegisterActivity : ComponentActivity() {
                                                     }
                                                 }
                                                 
-                                                Toast.makeText(this@RegisterActivity, "Cuenta creada con éxito", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(this@RegisterActivity, AppConstants.Messages.REGISTER_SUCCESS, Toast.LENGTH_LONG).show()
 
                                                 val intent = Intent(this@RegisterActivity, HomeActivity::class.java).apply {
                                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -170,7 +179,7 @@ class RegisterActivity : ComponentActivity() {
                                                 startActivity(intent)
                                                 finish()
                                             } else {
-                                                Toast.makeText(this@RegisterActivity, data?.message ?: "Error en el registro", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(this@RegisterActivity, data?.message ?: AppConstants.Messages.REGISTER_ERROR, Toast.LENGTH_LONG).show()
                                             }
                                         } else {
                                             Toast.makeText(
@@ -211,6 +220,7 @@ class RegisterActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RegisterScreen(
     imageUri: Uri?,
@@ -222,6 +232,33 @@ fun RegisterScreen(
     var apellido by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var contentVisible by remember { mutableStateOf(false) }
+    var categorias by remember { mutableStateOf<List<Categoria>>(emptyList()) }
+    var isLoadingCategorias by remember { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    
+    // Cargar categorías desde el API
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        contentVisible = true
+        
+        scope.launch {
+            try {
+                val response = RetrofitClient.instance.getCategorias()
+                if (response.isSuccessful && response.body() != null) {
+                    categorias = response.body()!!
+                    android.util.Log.d("RegisterActivity", "Categorías cargadas: ${categorias.size}")
+                } else {
+                    android.util.Log.e("RegisterActivity", "Error al cargar categorías: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("RegisterActivity", "Excepción al cargar categorías", e)
+            } finally {
+                isLoadingCategorias = false
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -245,31 +282,40 @@ fun RegisterScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             
-            Text(
-                text = "Únete a Kairos",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Text(
-                text = "Crea tu cuenta en segundos",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(
+                modifier = Modifier.fadeInUp(contentVisible, delayMillis = 0),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Únete a Kairos",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Crea tu cuenta en segundos",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Selector de Imagen con diseño mejorado
-            ProfileImagePicker(
-                imageUri = imageUri,
-                onClick = onImagePickerClick
-            )
+            Box(modifier = Modifier.bounceEntrance(contentVisible, delayMillis = 100)) {
+                ProfileImagePicker(
+                    imageUri = imageUri,
+                    onClick = onImagePickerClick
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Tarjeta con formulario
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fadeInUp(contentVisible, delayMillis = 200),
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(6.dp)
             ) {
@@ -329,12 +375,115 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Selección de Intereses
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fadeInUp(contentVisible, delayMillis = 250),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Tus Intereses",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Selecciona tus categorías favoritas para personalizar tu experiencia",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Grid dinámico de chips de intereses (desde API)
+                    var selectedInterests by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+                    if (isLoadingCategorias) {
+                        // Mostrar indicador de carga
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                        }
+                    } else if (categorias.isEmpty()) {
+                        // Sin categorías disponibles
+                        Text(
+                            "No hay categorías disponibles",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else {
+                        androidx.compose.foundation.layout.FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            categorias.forEach { categoria ->
+                                FilterChip(
+                                    selected = selectedInterests.contains(categoria.nombre),
+                                    onClick = {
+                                        selectedInterests = if (selectedInterests.contains(categoria.nombre)) {
+                                            selectedInterests - categoria.nombre
+                                        } else {
+                                            selectedInterests + categoria.nombre
+                                        }
+                                    },
+                                    label = { 
+                                        Text(
+                                            text = categoria.nombre,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) 
+                                    },
+                                    leadingIcon = if (selectedInterests.contains(categoria.nombre)) {
+                                        { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
+                                    } else null,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
+                        }
+
+                        // Guardar intereses cuando cambian
+                        LaunchedEffect(selectedInterests) {
+                            com.kairos.app.utils.SessionManager(context).saveInterests(selectedInterests)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Botón de Registrarse
             Button(
                 onClick = { onRegisterClick(name, apellido, email, password) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .fadeInUp(contentVisible, delayMillis = 300)
+                    .pressEffect(minScale = 0.96f),
                 shape = RoundedCornerShape(16.dp),
                 elevation = ButtonDefaults.buttonElevation(4.dp)
             ) {
@@ -346,9 +495,15 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Botón para regresar al Login
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fadeInUp(contentVisible, delayMillis = 350)
+            ) {
                 Text("¿Ya tienes cuenta?", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = onLoginClick) {
+                TextButton(
+                    onClick = onLoginClick,
+                    modifier = Modifier.pressEffect(minScale = 0.94f)
+                ) {
                     Text("Inicia sesión aquí", fontWeight = FontWeight.Bold)
                 }
             }

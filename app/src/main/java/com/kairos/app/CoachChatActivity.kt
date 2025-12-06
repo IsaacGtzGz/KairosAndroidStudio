@@ -1,5 +1,8 @@
 package com.kairos.app
 
+import com.kairos.app.utils.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,6 +30,10 @@ import androidx.lifecycle.lifecycleScope
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.NetworkHelper
+import com.kairos.app.components.EmptyState
+import com.kairos.app.components.LoadingState
 import kotlinx.coroutines.launch
 
 class CoachChatActivity : ComponentActivity() {

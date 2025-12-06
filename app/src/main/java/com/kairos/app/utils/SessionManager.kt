@@ -89,7 +89,16 @@ class SessionManager(context: Context) {
 
     fun saveUserEmail(email: String) { prefs.edit().putString("user_email", email).apply() }
     fun fetchUserEmail(): String? { return prefs.getString("user_email", null) }
+    fun fetchEmail(): String? { return prefs.getString("user_email", null) }
 
     fun saveUserProfilePic(url: String) { prefs.edit().putString("user_pic", url).apply() }
     fun fetchUserProfilePic(): String? { return prefs.getString("user_pic", null) }
+
+    // --- SISTEMA DE PUNTOS ---
+    fun saveUserPoints(points: Int) { prefs.edit().putInt("user_points", points).apply() }
+    fun fetchUserPoints(): Int? { return prefs.getInt("user_points", 0) }
+    
+    // --- ROL DE USUARIO ---
+    fun saveUserRole(role: String) { prefs.edit().putString("user_role", role).apply() }
+    fun fetchUserRole(): String? { return prefs.getString("user_role", "Usuario") }
 }

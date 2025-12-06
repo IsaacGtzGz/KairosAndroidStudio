@@ -37,6 +37,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -58,6 +59,11 @@ import com.kairos.app.models.UsoDigitalRequest
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.AppConstants
+import com.kairos.app.utils.formatPoints
+import com.kairos.app.utils.*
+import com.kairos.app.utils.startActivityWithSlideTransition
+import com.kairos.app.utils.finishWithFadeTransition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -93,14 +99,14 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             if (permissions.all { it.value }) {
                 proceedWithSosActions()
             } else {
-                Toast.makeText(this, "Se necesitan permisos para SOS", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, AppConstants.Messages.PERMISSION_NEEDED_SOS, Toast.LENGTH_LONG).show()
             }
         }
 
     private val requestContactPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) launchContactPicker()
-            else Toast.makeText(this, "Permiso de contactos denegado", Toast.LENGTH_SHORT).show()
+            else Toast.makeText(this, AppConstants.Messages.PERMISSION_CONTACTS_DENIED, Toast.LENGTH_SHORT).show()
         }
 
     private val requestActivityPermissionLauncher =
@@ -109,7 +115,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                 permissionGranted.value = true
                 setupStepCounter()
             } else {
-                Toast.makeText(this, "Permiso de actividad denegado", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, AppConstants.Messages.PERMISSION_ACTIVITY_DENIED, Toast.LENGTH_LONG).show()
             }
         }
 
@@ -129,7 +135,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         val number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
                         sessionManager.saveEmergencyContact(number)
                         emergencyContactNumber.value = number
-                        Toast.makeText(this, "Contacto guardado: $number", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "${AppConstants.Messages.CONTACT_SAVED}: $number", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -157,6 +163,9 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                     // Estado del insight (se carga del servidor)
                     var aiMessage by remember { mutableStateOf("Cargando tu análisis personalizado...") }
                     
+                    // Nombre del usuario desde SessionManager
+                    val userName = sessionManager.fetchUserName()?.split(" ")?.firstOrNull() ?: "Aventurero"
+                    
                     // Efecto para cargar el insight
                     LaunchedEffect(Unit) {
                         cargarInsightDelServidor { mensaje -> aiMessage = mensaje }
@@ -168,11 +177,11 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                             startActivity(Intent(this, MainActivity::class.java))
                             finish()
                         },
-                        onOpenMap = { startActivity(Intent(this, MapActivity::class.java)) },
+                        onOpenMap = { startActivityWithSlideTransition(Intent(this, MapActivity::class.java)) },
                         onSosClick = { showSosDialog.value = true },
                         emergencyContact = emergencyContactNumber.value,
                         onSelectContact = { handleSelectContactClick() },
-                        userName = "Aventurero",
+                        userName = userName,
                         showSosDialog = showSosDialog.value,
                         onDismissSosDialog = { showSosDialog.value = false },
                         onConfirmSos = {
@@ -182,15 +191,20 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         steps = stepsCount.value,
                         onStepsPermissionClick = { checkAndRequestActivityPermission() },
                         hasActivityPermission = permissionGranted.value,
-                        onRecompensasClick = { startActivity(Intent(this, RecompensasActivity::class.java)) },
+                        onRecompensasClick = { startActivityWithSlideTransition(Intent(this, RecompensasActivity::class.java)) },
                         hasUsagePermission = hasUsagePermission.value,
                         onUsagePermissionClick = {
-                            if (hasUsagePermission.value) startActivity(Intent(this, UsageDetailActivity::class.java))
+                            if (hasUsagePermission.value) startActivityWithSlideTransition(Intent(this, UsageDetailActivity::class.java))
                             else requestUsageStatsPermission()
                         },
                         usageTime = socialMediaUsageTime.value,
-                        onConfigClick = { startActivity(Intent(this, AjustesActivity::class.java)) },
-                        insightMessage = aiMessage // AHORA SÍ FUNCIONARÁ
+                        onConfigClick = { startActivityWithSlideTransition(Intent(this, AjustesActivity::class.java)) },
+                        insightMessage = aiMessage,
+                        onExplorarClick = { startActivityWithSlideTransition(Intent(this, ExplorarActivity::class.java)) },
+                        onRutasClick = { startActivityWithSlideTransition(Intent(this, RutasActivity::class.java)) },
+                        onNotificacionesClick = { startActivityWithSlideTransition(Intent(this, NotificacionesActivity::class.java)) },
+                        onFAQClick = { startActivityWithSlideTransition(Intent(this, FAQActivity::class.java)) },
+                        onContactoClick = { startActivityWithSlideTransition(Intent(this, ContactoActivity::class.java)) }
                     )
                 }
             }
@@ -314,7 +328,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
             val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
             usageStatsSettingsLauncher.launch(intent)
         } catch (e: Exception) {
-            Toast.makeText(this, "No se pudo abrir ajustes", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, AppConstants.Messages.SETTINGS_ERROR, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -375,7 +389,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         try {
             startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:911") })
         } catch (e: SecurityException) {
-            Toast.makeText(this, "Error permisos llamada", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, AppConstants.Messages.PERMISSION_CALL_ERROR, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             try {
                 startActivity(Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:911") })
@@ -402,17 +416,32 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
     private fun sendEmergencySms(contactNumber: String) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         val smsManager = SmsManager.getDefault()
+        
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location ->
                 val smsMessage = if (location != null) {
-                    "¡AYUDA! Ubicación: http://googleusercontent.com/maps/google.com/9?q=${location.latitude},${location.longitude}"
+                    "¡AYUDA! Ubicación: https://www.google.com/maps?q=${location.latitude},${location.longitude}"
                 } else {
                     "¡AYUDA! Contáctame."
                 }
                 try {
                     smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
-                    Toast.makeText(this, "Alerta enviada", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) { }
+                    Toast.makeText(this, AppConstants.Messages.ALERT_SENT, Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Error al enviar SMS: ${e.message}", Toast.LENGTH_SHORT).show()
+                    e.printStackTrace()
+                }
+            }
+            .addOnFailureListener { exception ->
+                // Si falla obtener ubicación, enviar SMS sin ubicación
+                val smsMessage = "¡AYUDA! Contáctame."
+                try {
+                    smsManager.sendTextMessage(contactNumber, null, smsMessage, null, null)
+                    Toast.makeText(this, AppConstants.Messages.ALERT_SENT, Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Error al enviar SMS: ${e.message}", Toast.LENGTH_SHORT).show()
+                    e.printStackTrace()
+                }
             }
     }
 
@@ -486,12 +515,19 @@ fun HomeScreen(
     onUsagePermissionClick: () -> Unit,
     usageTime: String,
     onConfigClick: () -> Unit,
-    insightMessage: String // PARÁMETRO AGREGADO AQUÍ
+    insightMessage: String,
+    onExplorarClick: () -> Unit,
+    onRutasClick: () -> Unit,
+    onNotificacionesClick: () -> Unit,
+    onFAQClick: () -> Unit,
+    onContactoClick: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val sessionManager = com.kairos.app.utils.SessionManager(context)
+    val userPoints = sessionManager.fetchUserPoints() ?: 0
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -521,6 +557,72 @@ fun HomeScreen(
                         context.startActivity(intent)
                     },
                     icon = { Icon(Icons.Default.Person, null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Mis Puntos") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        context.startActivity(Intent(context, HistorialPuntosActivity::class.java))
+                    },
+                    icon = { Icon(Icons.Default.Stars, null) },
+                    badge = { Text("$userPoints", fontSize = 12.sp) }
+                )
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                NavigationDrawerItem(
+                    label = { Text("Explorar") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onExplorarClick()
+                    },
+                    icon = { Icon(Icons.Default.Search, null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Recompensas") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onRecompensasClick()
+                    },
+                    icon = { Icon(Icons.Default.CardGiftcard, null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Rutas") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onRutasClick()
+                    },
+                    icon = { Icon(Icons.Default.Route, null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Notificaciones") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNotificacionesClick()
+                    },
+                    icon = { Icon(Icons.Default.Notifications, null) }
+                )
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                NavigationDrawerItem(
+                    label = { Text("Ayuda") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onFAQClick()
+                    },
+                    icon = { Icon(Icons.Default.HelpOutline, null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Contacto") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onContactoClick()
+                    },
+                    icon = { Icon(Icons.Default.Email, null) }
                 )
                 NavigationDrawerItem(
                     label = { Text("Configuración") },
@@ -561,6 +663,49 @@ fun HomeScreen(
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menú")
                         }
+                    },
+                    actions = {
+                        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                        val scale by infiniteTransition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1000, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "scale"
+                        )
+                        
+                        Surface(
+                            onClick = {
+                                context.startActivity(android.content.Intent(context, HistorialPuntosActivity::class.java))
+                            },
+                            color = AppConstants.Colors.DarkGreen,
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier
+                                .graphicsLayer(scaleX = scale, scaleY = scale)
+                                .pressEffect(minScale = 0.92f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Stars,
+                                    null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "$userPoints",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
                 )
             },
@@ -569,13 +714,17 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    FloatingActionButton(onClick = onOpenMap) {
+                    FloatingActionButton(
+                        onClick = onOpenMap,
+                        modifier = Modifier.pressEffect(minScale = 0.90f)
+                    ) {
                         Icon(Icons.Default.Map, contentDescription = "Mapa")
                     }
                     FloatingActionButton(
                         onClick = { onSosClick() },
                         containerColor = MaterialTheme.colorScheme.errorContainer,
-                        shape = CircleShape
+                        shape = CircleShape,
+                        modifier = Modifier.pressEffect(minScale = 0.85f)
                     ) {
                         Text("SOS", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                     }
@@ -598,6 +747,12 @@ fun HomeScreen(
                     )
                 }
 
+                var contentVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(100)
+                    contentVisible = true
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -606,85 +761,86 @@ fun HomeScreen(
                         .verticalScroll(scrollState)
                 ) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    ModernGreeting(userName = userName)
+                    Box(modifier = Modifier.fadeInUp(contentVisible, delayMillis = 0)) {
+                        ModernGreeting(userName = userName)
+                    }
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    ModernInsightCard(
-                        insight = insightMessage,
-                        onChatClick = {
-                            context.startActivity(Intent(context, CoachChatActivity::class.java))
+                    Box(modifier = Modifier.fadeInUp(contentVisible, delayMillis = 100)) {
+                        ModernInsightCard(
+                            insight = insightMessage,
+                            onChatClick = {
+                                context.startActivity(Intent(context, CoachChatActivity::class.java))
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Box(modifier = Modifier.slideInFromSide(contentVisible, fromLeft = true, delayMillis = 200)) {
+                        Column {
+                            Text(
+                                "Explora tu ciudad",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Descubre lugares increíbles",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        "Explora tu ciudad",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Descubre lugares increíbles",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
-                    DiscoverCarouselPremium(onOpenMap = onOpenMap)
+                    Box(modifier = Modifier.fadeInUp(contentVisible, delayMillis = 250)) {
+                        DiscoverCarouselPremium(onOpenMap = onOpenMap)
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Text(
-                        "Tu Bienestar Hoy", 
-                        style = MaterialTheme.typography.titleLarge, 
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Box(modifier = Modifier.slideInFromSide(contentVisible, fromLeft = false, delayMillis = 300)) {
+                        Text(
+                            "Tu Bienestar Hoy", 
+                            style = MaterialTheme.typography.titleLarge, 
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Box(modifier = Modifier.weight(1f)) {
+                        Box(modifier = Modifier.weight(1f).bounceEntrance(contentVisible, delayMillis = 350)) {
                             StepCounterCardPremiumV2(steps, hasActivityPermission, onStepsPermissionClick)
                         }
-                        Box(modifier = Modifier.weight(1f)) {
+                        Box(modifier = Modifier.weight(1f).bounceEntrance(contentVisible, delayMillis = 400)) {
                             UsageMonitorCardPremiumV2(hasUsagePermission, usageTime, onUsagePermissionClick)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Text("Accesos Rápidos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    EmergencyContactCardPremium(emergencyContact, onSelectContact)
-                    
+                    Box(modifier = Modifier.fadeInUp(contentVisible, delayMillis = 450)) {
+                        Text("Accesos Rápidos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    Box(modifier = Modifier.fadeInUp(contentVisible, delayMillis = 500)) {
+                        QuickActionsStrip(
+                            onRecompensasClick = onRecompensasClick,
+                            onMapClick = onOpenMap,
+                            onAjustesClick = onConfigClick,
+                            onExplorarClick = onExplorarClick,
+                            onRutasClick = onRutasClick,
+                            onNotificacionesClick = onNotificacionesClick,
+                            onFAQClick = onFAQClick,
+                            onContactoClick = onContactoClick
+                        )
+                    }
                     
-                    Button(
-                        onClick = onRecompensasClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CardGiftcard,
-                            null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            "Ver Recompensas",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            null,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Box(modifier = Modifier.bounceEntrance(contentVisible, delayMillis = 550)) {
+                        EmergencyContactCardPremium(emergencyContact, onSelectContact)
                     }
 
                     Spacer(modifier = Modifier.height(80.dp))
@@ -1156,7 +1312,9 @@ fun ModernGreeting(userName: String) {
     }
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressEffect(minScale = 0.98f),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         ),
@@ -1225,6 +1383,7 @@ fun ModernInsightCard(insight: String, onChatClick: () -> Unit) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .pressEffect(minScale = 0.97f)
                 .clickable(onClick = onChatClick),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
@@ -1315,13 +1474,22 @@ fun ModernInsightCard(insight: String, onChatClick: () -> Unit) {
 @OptIn(ExperimentalPagerApi::class)
 @Composable
 fun DiscoverCarouselPremium(onOpenMap: () -> Unit) {
+    // Mapeo de categorías: Nombre, descripción, icono, ID de categoría, colores
+    data class CarouselItem(
+        val title: String,
+        val desc: String,
+        val icon: androidx.compose.ui.graphics.vector.ImageVector,
+        val categoriaId: Int,
+        val colors: List<Color>
+    )
+    
     val items = listOf(
-        Triple("Naturaleza", "Parques y senderos naturales", Icons.Default.Terrain) to 
-            listOf(Color(0xFF4CAF50), Color(0xFF81C784)),
-        Triple("Cultura", "Museos y patrimonio cultural", Icons.Default.AccountBalance) to 
-            listOf(Color(0xFF5C6BC0), Color(0xFF9FA8DA)),
-        Triple("Local", "Mercados y zonas comerciales", Icons.Default.Storefront) to 
-            listOf(Color(0xFFFF7043), Color(0xFFFFAB91))
+        CarouselItem("Naturaleza", "Parques y senderos naturales", Icons.Default.Terrain, 1, 
+            listOf(AppConstants.Colors.PrimaryGreen, Color(0xFF81C784))),
+        CarouselItem("Cultura", "Museos y patrimonio cultural", Icons.Default.AccountBalance, 2,
+            listOf(Color(0xFF5C6BC0), Color(0xFF9FA8DA))),
+        CarouselItem("Local", "Mercados y zonas comerciales", Icons.Default.Storefront, 6,
+            listOf(Color(0xFFFF7043), Color(0xFFFFAB91)))
     )
     
     val context = LocalContext.current
@@ -1337,19 +1505,24 @@ fun DiscoverCarouselPremium(onOpenMap: () -> Unit) {
         contentPadding = PaddingValues(horizontal = 20.dp)
     ) { page ->
         val item = items[page]
-        val triple = item.first
-        val title = triple.first
-        val desc = triple.second
-        val icon = triple.third
-        val colors = item.second
+        val title = item.title
+        val desc = item.desc
+        val icon = item.icon
+        val categoriaId = item.categoriaId
+        val colors = item.colors
 
         Card(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp)
+                .pressEffect(minScale = 0.95f)
                 .clickable {
-                    Toast.makeText(context, "Explorando $title en el mapa", Toast.LENGTH_SHORT).show()
-                    onOpenMap()
+                    Toast.makeText(context, "${AppConstants.Messages.EXPLORING_MAP}: $title", Toast.LENGTH_SHORT).show()
+                    // Abrir mapa con categoría específica
+                    val intent = Intent(context, MapActivity::class.java).apply {
+                        putExtra("categoriaId", categoriaId)
+                    }
+                    context.startActivity(intent)
                 },
             shape = RoundedCornerShape(28.dp),
             elevation = CardDefaults.cardElevation(8.dp)
@@ -1449,6 +1622,7 @@ fun StepCounterCardPremiumV2(steps: String, hasPermission: Boolean, onClick: () 
         modifier = Modifier
             .fillMaxWidth()
             .height(160.dp)
+            .pressEffect(minScale = 0.96f)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
@@ -1535,6 +1709,7 @@ fun UsageMonitorCardPremiumV2(hasPermission: Boolean, time: String, onClick: () 
         modifier = Modifier
             .fillMaxWidth()
             .height(160.dp)
+            .pressEffect(minScale = 0.96f)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
@@ -1620,6 +1795,7 @@ fun EmergencyContactCardPremium(contactNumber: String?, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect(minScale = 0.97f)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (contactNumber != null) 
@@ -1690,61 +1866,97 @@ fun EmergencyContactCardPremium(contactNumber: String?, onClick: () -> Unit) {
 }
 
 @Composable
-fun QuickActionsStrip(onRecompensasClick: () -> Unit, onMapClick: () -> Unit, onAjustesClick: () -> Unit) {
-    val actions = listOf(
-        Triple("Recompensas", Icons.Default.CardGiftcard, onRecompensasClick),
-        Triple("Mapa", Icons.Default.Map, onMapClick),
-        Triple("Ajustes", Icons.Default.Settings, onAjustesClick)
-    )
-    
-    Card(
+fun QuickActionsStrip(
+    onRecompensasClick: () -> Unit,
+    onMapClick: () -> Unit,
+    onAjustesClick: () -> Unit,
+    onExplorarClick: () -> Unit,
+    onRutasClick: () -> Unit,
+    onNotificacionesClick: () -> Unit,
+    onFAQClick: () -> Unit,
+    onContactoClick: () -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(2.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        // Primera fila
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            actions.forEach { (label, icon, onClick) ->
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(onClick = onClick),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(16.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                QuickActionButton("Explorar", Icons.Default.Search, onExplorarClick)
+                QuickActionButton("Rutas", Icons.Default.Route, onRutasClick)
+                QuickActionButton("Recompensas", Icons.Default.CardGiftcard, onRecompensasClick)
+                QuickActionButton("Mapa", Icons.Default.Map, onMapClick)
             }
         }
+        
+        // Segunda fila
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                QuickActionButton("Notificaciones", Icons.Default.Notifications, onNotificacionesClick)
+                QuickActionButton("FAQ", Icons.Default.HelpOutline, onFAQClick)
+                QuickActionButton("Contacto", Icons.Default.Email, onContactoClick)
+                QuickActionButton("Ajustes", Icons.Default.Settings, onAjustesClick)
+            }
+        }
+    }
+}
+
+@Composable
+fun RowScope.QuickActionButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .pressEffect(minScale = 0.90f)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
