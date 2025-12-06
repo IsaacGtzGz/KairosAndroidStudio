@@ -11,7 +11,7 @@ object RetrofitClient {
     
     //private const val BASE_URL = "http://192.168.1.67:5219/api/" // RED LOCAL (DESARROLLO)
     //private const val BASE_URL = "http://192.168.64.193:5219/api/" // RED Cel
-    private const val BASE_URL = "https://kairos-api-deleon-cwffh5augvctfyb7.westus-01.azurewebsites.net/"
+    private const val BASE_URL = "https://kairos-api-deleon-cwffh5augvctfyb7.westus-01.azurewebsites.net/api/"
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
