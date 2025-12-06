@@ -82,6 +82,7 @@ import com.kairos.app.models.ReclamarPuntosRequest
 import com.kairos.app.network.RetrofitClient
 import com.kairos.app.ui.theme.KairosTheme
 import com.kairos.app.utils.SessionManager
+import com.kairos.app.utils.CheckInManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -104,6 +105,7 @@ class MapActivity : ComponentActivity() {
 
     private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
     private lateinit var sessionManager: SessionManager
+    private lateinit var checkInManager: CheckInManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(
@@ -121,6 +123,7 @@ class MapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sessionManager = SessionManager(this)
+        checkInManager = CheckInManager(this)
 
         // Obtener categoría inicial desde Intent (desde carrusel)
         val categoriaInicial = intent.getIntExtra("categoriaId", -1)
@@ -575,84 +578,134 @@ fun ActualMapScreen(
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
+                        val userId = sessionManager.fetchUserId()
+                        val yaReclamado = checkInManager.yaHizoCheckIn(userId, lugar.idLugar ?: 0)
+                        
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                         ) {
                             // Botón Check-in
                             if (lugar.puntosOtorgados > 0) {
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            isCheckingIn = true
-                                            val distancia = calcularDistancia(
-                                                userLocation.latitude,
-                                                userLocation.longitude,
-                                                lugar.latitud,
-                                                lugar.longitud
+                                if (yaReclamado) {
+                                    // Mostrar estado de ya reclamado
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .background(
+                                                color = Color(0xFFE8F5E9),
+                                                shape = RoundedCornerShape(8.dp)
                                             )
-                                            
-                                            if (distancia > 100) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Debes estar a menos de 100 metros del lugar. Distancia actual: ${distancia.toInt()}m",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                                isCheckingIn = false
-                                                return@launch
-                                            }
-                                            
-                                            try {
-                                                val userId = sessionManager.fetchUserId()
-                                                val request = ReclamarPuntosRequest(
-                                                    idUsuario = userId,
-                                                    idLugar = lugar.idLugar ?: 0,
-                                                    latitudUsuario = userLocation.latitude,
-                                                    longitudUsuario = userLocation.longitude
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF4CAF50),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "✓ Reclamado",
+                                                color = Color(0xFF2E7D32),
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                isCheckingIn = true
+                                                val distancia = calcularDistancia(
+                                                    userLocation.latitude,
+                                                    userLocation.longitude,
+                                                    lugar.latitud,
+                                                    lugar.longitud
                                                 )
                                                 
-                                                val response = RetrofitClient.instance.reclamarPuntos(request)
-                                                
-                                                if (response.isSuccessful && response.body()?.exito == true) {
-                                                    val puntosGanados = response.body()?.puntosGanados ?: 0
+                                                if (distancia > 100) {
                                                     Toast.makeText(
                                                         context,
-                                                        "¡Check-in exitoso! +${puntosGanados} puntos 🎉",
+                                                        "Debes estar a menos de 100 metros del lugar. Distancia actual: ${distancia.toInt()}m",
                                                         Toast.LENGTH_LONG
                                                     ).show()
-                                                } else {
-                                                    Toast.makeText(
-                                                        context,
-                                                        response.body()?.mensaje ?: "Error al hacer check-in",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
+                                                    isCheckingIn = false
+                                                    return@launch
                                                 }
-                                            } catch (e: Exception) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Error: ${e.message}",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            } finally {
-                                                isCheckingIn = false
+                                                
+                                                try {
+                                                    val request = ReclamarPuntosRequest(
+                                                        idUsuario = userId,
+                                                        idLugar = lugar.idLugar ?: 0,
+                                                        latitudUsuario = userLocation.latitude,
+                                                        longitudUsuario = userLocation.longitude
+                                                    )
+                                                    
+                                                    val response = RetrofitClient.instance.reclamarPuntos(request)
+                                                    
+                                                    if (response.isSuccessful && response.body()?.exito == true) {
+                                                        val puntosGanados = response.body()?.puntosGanados ?: 0
+                                                        
+                                                        // Guardar check-in localmente
+                                                        checkInManager.marcarCheckInRealizado(userId, lugar.idLugar ?: 0)
+                                                        
+                                                        // Refrescar puntos del usuario
+                                                        try {
+                                                            val userResponse = RetrofitClient.instance.getUsuario(userId)
+                                                            if (userResponse.isSuccessful) {
+                                                                val puntosActualizados = userResponse.body()?.puntosAcumulados ?: 0
+                                                                sessionManager.saveUserPoints(puntosActualizados)
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            // Si falla la actualización, no hacer nada crítico
+                                                        }
+                                                        
+                                                        Toast.makeText(
+                                                            context,
+                                                            "¡Check-in exitoso! +${puntosGanados} puntos 🎉",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    } else {
+                                                        Toast.makeText(
+                                                            context,
+                                                            response.body()?.mensaje ?: "Error al hacer check-in",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Error: ${e.message}",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                } finally {
+                                                    isCheckingIn = false
+                                                }
                                             }
-                                        }
-                                    },
-                                    enabled = !isCheckingIn,
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = AppConstants.Colors.DarkGreen
-                                    )
-                                ) {
-                                    if (isCheckingIn) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.width(16.dp).height(16.dp),
-                                            color = MaterialTheme.colorScheme.onPrimary
+                                        },
+                                        enabled = !isCheckingIn,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = AppConstants.Colors.DarkGreen
                                         )
-                                    } else {
-                                        Icon(Icons.Default.CheckCircle, null)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Check-in")
+                                    ) {
+                                        if (isCheckingIn) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.width(16.dp).height(16.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.CheckCircle, null)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Check-in")
+                                        }
                                     }
                                 }
                             }

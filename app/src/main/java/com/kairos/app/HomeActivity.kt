@@ -51,6 +51,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import com.google.accompanist.pager.*
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -220,6 +221,22 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
         checkUsageStatsPermission()
         getSocialMediaUsage()
         sincronizarDatosConBackend()
+        refrescarPuntosUsuario()
+    }
+    
+    private fun refrescarPuntosUsuario() {
+        lifecycleScope.launch {
+            try {
+                val userId = sessionManager.fetchUserId()
+                val response = RetrofitClient.instance.getUsuario(userId)
+                if (response.isSuccessful) {
+                    val puntosActualizados = response.body()?.puntosAcumulados ?: 0
+                    sessionManager.saveUserPoints(puntosActualizados)
+                }
+            } catch (e: Exception) {
+                // Si falla, no hacer nada
+            }
+        }
     }
 
     override fun onPause() {
