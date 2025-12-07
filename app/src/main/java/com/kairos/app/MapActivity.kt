@@ -22,7 +22,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 // Iconos
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -182,6 +186,7 @@ class MapActivity : ComponentActivity() {
                     onOpenGpsSettings = { openLocationSettings() },
                     context = this@MapActivity,
                     sessionManager = sessionManager,
+                    checkInManager = checkInManager,
                     onNavigateClick = { lugar ->
                         // CORREGIDO: Ahora abre TU pantalla de detalles, no el GPS directo
                         val intent = Intent(this, DetalleLugarActivity::class.java).apply {
@@ -293,7 +298,8 @@ fun MapScreenRoot(
     onNavigateClick: (Lugar) -> Unit,
     onProfileSettingsClick: () -> Unit,
     context: Context,
-    sessionManager: SessionManager
+    sessionManager: SessionManager,
+    checkInManager: CheckInManager
 ) {
     if (showGpsDialog) {
         AlertDialog(
@@ -339,7 +345,8 @@ fun MapScreenRoot(
             onNavigateClick = onNavigateClick,
             onProfileSettingsClick = onProfileSettingsClick,
             context = context,
-            sessionManager = sessionManager
+            sessionManager = sessionManager,
+            checkInManager = checkInManager
         )
     }
 }
@@ -355,7 +362,8 @@ fun ActualMapScreen(
     onNavigateClick: (Lugar) -> Unit,
     onProfileSettingsClick: () -> Unit,
     context: Context,
-    sessionManager: SessionManager
+    sessionManager: SessionManager,
+    checkInManager: CheckInManager
 ) {
     var selectedLugar by remember { mutableStateOf<Lugar?>(null) }
     var isCheckingIn by remember { mutableStateOf(false) }

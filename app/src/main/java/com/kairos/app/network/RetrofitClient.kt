@@ -9,9 +9,13 @@ object RetrofitClient {
     // CAMBIAR ESTA URL CUANDO SE SUBA A AZURE
     // Cuando tengan la URL de producción, reemplazar la línea activa por la URL de Azure
     
-    //x     private const val BASE_URL = "http://192.168.1.67:5219/api/" // RED LOCAL (DESARROLLO)
+    private const val BASE_URL = "http://192.168.126.193:5219/api/" // RED LOCAL (DESARROLLO)
+    //private const val BASE_URL = "http://192.168.1.67:5219/api/" // RED LOCAL ANTIGUA
     //private const val BASE_URL = "http://192.168.64.193:5219/api/" // RED Cel
-    private const val BASE_URL = "https://kairos-api-deleon-cwffh5augvctfyb7.westus-01.azurewebsites.net/api/"
+    
+    // AZURE URLs (comentadas temporalmente)
+    //private const val BASE_URL = "https://kairos-api-deleon-cwffh5augvctfyb7.westus-01.azurewebsites.net/api/" // AZURE ORIGINAL (EXPIRADO)
+    //private const val BASE_URL = "https://kairos-api-new-deleon-exd0e6hudxa6dhhj.westus-01.azurewebsites.net/api/" // AZURE NUEVO (NO FUNCIONA)
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

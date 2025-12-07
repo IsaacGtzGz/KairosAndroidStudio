@@ -178,9 +178,18 @@ class PromocionDetalleActivity : ComponentActivity() {
                                                 )
                                                 val response = RetrofitClient.instance.registrarClic(clicRequest)
                                                 if (response.isSuccessful) {
-                                                    // Restar puntos localmente
-                                                    val nuevosPuntos = puntosUsuario - puntosRequeridos
-                                                    sessionManager.saveUserPoints(nuevosPuntos)
+                                                    // Recargar puntos desde el servidor
+                                                    try {
+                                                        val userResponse = RetrofitClient.instance.getUsuario(userId)
+                                                        if (userResponse.isSuccessful) {
+                                                            val puntosActualizados = userResponse.body()?.puntosAcumulados ?: 0
+                                                            sessionManager.saveUserPoints(puntosActualizados)
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        // Si falla la recarga, usar valor calculado
+                                                        val nuevosPuntos = puntosUsuario - puntosRequeridos
+                                                        sessionManager.saveUserPoints(nuevosPuntos)
+                                                    }
                                                     canCanjear = false
                                                     showDialog = true
                                                 } else {

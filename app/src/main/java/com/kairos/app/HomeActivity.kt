@@ -201,7 +201,7 @@ class HomeActivity : ComponentActivity(), SensorEventListener {
                         usageTime = socialMediaUsageTime.value,
                         onConfigClick = { startActivityWithSlideTransition(Intent(this, AjustesActivity::class.java)) },
                         insightMessage = aiMessage,
-                        onExplorarClick = { startActivityWithSlideTransition(Intent(this, ExplorarActivity::class.java)) },
+                        onExplorarClick = { startActivityWithSlideTransition(Intent(this, MapActivity::class.java)) },
                         onRutasClick = { startActivityWithSlideTransition(Intent(this, RutasActivity::class.java)) },
                         onNotificacionesClick = { startActivityWithSlideTransition(Intent(this, NotificacionesActivity::class.java)) },
                         onFAQClick = { startActivityWithSlideTransition(Intent(this, FAQActivity::class.java)) },

@@ -52,11 +52,11 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.launch
 
 class ExplorarActivity : ComponentActivity() {
-    
+
     private var userLocation by mutableStateOf<LatLng?>(null)
     private val defaultLocation = LatLng(21.1290, -101.6700) // León, Gto
     private lateinit var checkInManager: CheckInManager
-    
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -64,14 +64,14 @@ class ExplorarActivity : ComponentActivity() {
             getDeviceLocation()
         }
     }
-    
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Inicializar CheckInManager
         checkInManager = CheckInManager(this)
-        
+
         // Solicitar ubicación
         checkLocationPermission()
 
@@ -84,7 +84,7 @@ class ExplorarActivity : ComponentActivity() {
                 var categoriaSeleccionada by remember { mutableStateOf<Int?>(null) }
                 var ciudadSeleccionada by remember { mutableStateOf<String?>(null) }
                 var showFiltros by remember { mutableStateOf(false) }
-                
+
                 val sessionManager = remember { SessionManager(this@ExplorarActivity) }
                 val currentLocation = userLocation ?: defaultLocation
 
@@ -99,7 +99,7 @@ class ExplorarActivity : ComponentActivity() {
                         isLoading = false
                         return@LaunchedEffect
                     }
-                    
+
                     try {
                         val responseLugares = RetrofitClient.instance.getLugares()
                         val responseCategorias = RetrofitClient.instance.getCategorias()
@@ -119,7 +119,7 @@ class ExplorarActivity : ComponentActivity() {
 
                 // Filtrado
                 val lugaresFiltrados = lugares.filter { lugar ->
-                    val matchTexto = filtroTexto.isEmpty() || 
+                    val matchTexto = filtroTexto.isEmpty() ||
                         lugar.nombre.contains(filtroTexto, ignoreCase = true) ||
                         lugar.descripcion?.contains(filtroTexto, ignoreCase = true) == true
                     val matchCategoria = categoriaSeleccionada == null || lugar.idCategoria == categoriaSeleccionada
@@ -252,20 +252,23 @@ class ExplorarActivity : ComponentActivity() {
                                             lugar = lugar,
                                             userLocation = currentLocation,
                                             sessionManager = sessionManager,
+                                            checkInManager = checkInManager,
                                             context = this@ExplorarActivity,
                                             onClick = {
-                                                val intent = Intent(this@ExplorarActivity, DetalleLugarActivity::class.java).apply {
-                                                    putExtra("idLugar", lugar.idLugar)
-                                                    putExtra("nombre", lugar.nombre)
-                                                    putExtra("descripcion", lugar.descripcion)
-                                                    putExtra("direccion", lugar.direccion)
-                                                    putExtra("horario", lugar.horario)
-                                                    putExtra("imagen", lugar.imagenUrl)
-                                                    putExtra("lat", lugar.latitud)
-                                                    putExtra("lng", lugar.longitud)
-                                                    putExtra("puntosOtorgados", lugar.puntosOtorgados)
-                                                }
-                                                startActivity(intent)
+                                                // Navegar a los detalles del lugar
+                                                startActivity(
+                                                    Intent(this@ExplorarActivity, DetalleLugarActivity::class.java).apply {
+                                                        putExtra("idLugar", lugar.idLugar ?: 0)
+                                                        putExtra("nombre", lugar.nombre ?: "")
+                                                        putExtra("descripcion", lugar.descripcion ?: "")
+                                                        putExtra("direccion", lugar.direccion ?: "")
+                                                        putExtra("horario", lugar.horario ?: "")
+                                                        putExtra("imagen", lugar.imagenUrl ?: "")
+                                                        putExtra("lat", lugar.latitud)
+                                                        putExtra("lng", lugar.longitud)
+                                                        putExtra("puntosOtorgados", lugar.puntosOtorgados)
+                                                    }
+                                                )
                                             }
                                         )
                                     }
@@ -277,7 +280,7 @@ class ExplorarActivity : ComponentActivity() {
             }
         }
     }
-    
+
     private fun checkLocationPermission() {
         when {
             ContextCompat.checkSelfPermission(
@@ -291,7 +294,7 @@ class ExplorarActivity : ComponentActivity() {
             }
         }
     }
-    
+
     private fun getDeviceLocation() {
         try {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -310,14 +313,21 @@ class ExplorarActivity : ComponentActivity() {
             userLocation = defaultLocation
         }
     }
+    
+    private fun calcularDistancia(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return results[0]
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LugarCard(
-    lugar: Lugar, 
+    lugar: Lugar,
     userLocation: LatLng,
     sessionManager: SessionManager,
+    checkInManager: CheckInManager,
     context: android.content.Context,
     onClick: () -> Unit
 ) {
@@ -418,14 +428,14 @@ fun LugarCard(
                 }
             }
         }
-            
+
             // Botón Check-in (solo si tiene puntos)
             if (lugar.puntosOtorgados > 0) {
                 Divider(modifier = Modifier.fillMaxWidth())
-                
+
                 val userId = sessionManager.fetchUserId()
                 val yaReclamado = checkInManager.yaHizoCheckIn(userId, lugar.idLugar ?: 0)
-                
+
                 if (yaReclamado) {
                     // Mostrar estado de ya reclamado
                     Box(
@@ -462,14 +472,14 @@ fun LugarCard(
                         onClick = {
                             scope.launch {
                                 isCheckingIn = true
-                                val distancia = calcularDistancia(
+                                val distancia = calcularDistanciaEnLugarCard(
                                     userLocation.latitude,
                                     userLocation.longitude,
                                     lugar.latitud,
                                     lugar.longitud
                                 )
-                                
-                                if (distancia > 100) {
+
+                                if (distancia > 100f) {
                                     Toast.makeText(
                                         context,
                                         "Debes estar a menos de 100 metros del lugar. Distancia actual: ${distancia.toInt()}m",
@@ -478,7 +488,7 @@ fun LugarCard(
                                     isCheckingIn = false
                                     return@launch
                                 }
-                                
+
                                 try {
                                     val request = ReclamarPuntosRequest(
                                         idUsuario = userId,
@@ -486,15 +496,15 @@ fun LugarCard(
                                         latitudUsuario = userLocation.latitude,
                                         longitudUsuario = userLocation.longitude
                                     )
-                                    
+
                                     val response = RetrofitClient.instance.reclamarPuntos(request)
-                                    
+
                                     if (response.isSuccessful && response.body()?.exito == true) {
                                         val puntosGanados = response.body()?.puntosGanados ?: 0
-                                        
+
                                         // Guardar check-in localmente
                                         checkInManager.marcarCheckInRealizado(userId, lugar.idLugar ?: 0)
-                                        
+
                                         // Refrescar puntos del usuario
                                         try {
                                             val userResponse = RetrofitClient.instance.getUsuario(userId)
@@ -505,7 +515,7 @@ fun LugarCard(
                                         } catch (e: Exception) {
                                             // Si falla la actualización, no hacer nada crítico
                                         }
-                                        
+
                                         Toast.makeText(
                                             context,
                                             "¡Check-in exitoso! +${puntosGanados} puntos 🎉",
@@ -555,4 +565,11 @@ fun LugarCard(
             }
         }
     }
+}
+
+// Función helper para calcular distancia entre dos puntos
+private fun calcularDistanciaEnLugarCard(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+    val results = FloatArray(1)
+    Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+    return results[0]
 }
